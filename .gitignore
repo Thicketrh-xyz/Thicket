@@ -1,0 +1,20 @@
+# contracts
+contracts/lib/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.egg-info/
+
+# node desktop shell
+node_modules/
+node/src-tauri/target/
+
+# os
+.DS_Store

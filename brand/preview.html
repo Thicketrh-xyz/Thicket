@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Thicket — brand</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  body { margin:0; font:16px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:860px; margin:0 auto; padding:48px 24px; }
+  h1 { font-size:2.4rem; margin:0 0 4px; letter-spacing:-.02em; }
+  h1 .leaf { color:var(--accent); }
+  .sub { color:var(--text-muted); margin:0 0 40px; }
+  .swatches { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; margin-bottom:40px; }
+  .sw { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .sw .chip { height:72px; }
+  .sw .label { padding:8px 12px; font-size:.8rem; }
+  .sw .label b { display:block; }
+  .sw .label span { color:var(--text-muted); font-variant-numeric:tabular-nums; }
+  .card { background:var(--bg-panel); border:1px solid var(--border); border-radius:16px; padding:24px; margin-bottom:16px; }
+  .card h3 { margin:0 0 8px; }
+  .btn { display:inline-block; background:var(--accent); color:var(--thicket-ink); border:none; font-weight:700;
+         padding:12px 22px; border-radius:10px; cursor:pointer; }
+  .btn:hover { background:var(--accent-hover); }
+  .btn.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  .stat { font-size:2rem; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums; }
+  .muted { color:var(--text-muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🌿 Thicket<span class="leaf">.</span></h1>
+    <p class="sub">Decentralized GPU network — brand tokens from the circuit-tree logo.</p>
+
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:var(--thicket-lime)"></div><div class="label"><b>lime</b><span>#a3ce3a</span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--thicket-lime-bright)"></div><div class="label"><b>lime bright</b><span>#b6e04a</span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--thicket-lime-deep)"></div><div class="label"><b>lime deep</b><span>#7fa82c</span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--thicket-ink)"></div><div class="label"><b>ink</b><span>#14170f</span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--thicket-mist)"></div><div class="label"><b>mist</b><span>#f4f6ee</span></div></div>
+    </div>
+
+    <div class="card">
+      <h3>Node online</h3>
+      <div class="stat">1,284.6 THKT</div>
+      <p class="muted">Earned this epoch · 42 verified challenges passed</p>
+      <button class="btn">Claim rewards</button>
+      <button class="btn ghost">Stake</button>
+    </div>
+  </div>
+</body>
+</html>

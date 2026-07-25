@@ -1,0 +1,55 @@
+/* Thicket brand tokens — derived from the circuit-tree logo (lime on white).
+   Import this everywhere UI is rendered (node client, dashboard, docs). */
+
+:root {
+  /* Core brand — the logo lime */
+  --thicket-lime:        #a3ce3a;  /* primary: circuit-tree green */
+  --thicket-lime-bright: #b6e04a;  /* hover / active / glow */
+  --thicket-lime-deep:   #7fa82c;  /* pressed / borders on light bg */
+  --thicket-lime-dim:    #5c7a20;  /* muted lime for secondary text */
+
+  /* Neutrals */
+  --thicket-white:  #ffffff;
+  --thicket-ink:    #14170f;  /* near-black with a green cast */
+  --thicket-slate:  #3a3f31;
+  --thicket-mist:   #f4f6ee;  /* off-white panel on light */
+
+  /* Semantic (default = light, matching the logo on white) */
+  --bg:            var(--thicket-white);
+  --bg-panel:      var(--thicket-mist);
+  --text:          var(--thicket-ink);
+  --text-muted:    var(--thicket-slate);
+  --accent:        var(--thicket-lime);
+  --accent-hover:  var(--thicket-lime-deep);
+  --border:        #e2e7d5;
+
+  /* Status */
+  --ok:    var(--thicket-lime);
+  --warn:  #e0a53a;
+  --error: #d6543a;
+}
+
+/* Dark mode — lime pops on near-black, the natural DePIN/terminal look */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:           var(--thicket-ink);
+    --bg-panel:     #1d211680;
+    --text:         #eef1e6;
+    --text-muted:   #9aa588;
+    --accent:       var(--thicket-lime);
+    --accent-hover: var(--thicket-lime-bright);
+    --border:       #2c3222;
+  }
+}
+
+/* Explicit theme override (viewer toggle stamps data-theme on :root) */
+:root[data-theme="dark"] {
+  --bg: var(--thicket-ink); --bg-panel: #1d211680; --text: #eef1e6;
+  --text-muted: #9aa588; --accent: var(--thicket-lime);
+  --accent-hover: var(--thicket-lime-bright); --border: #2c3222;
+}
+:root[data-theme="light"] {
+  --bg: var(--thicket-white); --bg-panel: var(--thicket-mist); --text: var(--thicket-ink);
+  --text-muted: var(--thicket-slate); --accent: var(--thicket-lime);
+  --accent-hover: var(--thicket-lime-deep); --border: #e2e7d5;
+}
