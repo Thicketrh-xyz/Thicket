@@ -1,44 +1,48 @@
 """
 Thicket Coordinator — the off-chain brain of the hybrid DePIN loop.
 
-Responsibilities:
-  1. Register nodes and verify their signed heartbeats.
-  2. Accrue "contribution minutes" per wallet while a node is online.
-  3. Issue random inference *challenges* and verify results (anti-sybil).
-  4. At each epoch, compute cumulative THKT owed per wallet, build a Merkle
-     tree of (account, cumulativeAmount), and publish the root on-chain via
-     RewardsDistributor.publishRoot().
+  1. Register nodes (verify EIP-191 signature + on-chain bond).
+  2. Accrue "contribution minutes" per wallet from signed heartbeats.
+  3. Issue random verifiable challenges; void earnings / slash on failure.
+  4. At epoch close, build a cumulative-reward Merkle root and publish it.
 
-This is an MVP skeleton: in-memory state, wired endpoints, TODOs where the
-real crypto/economics go. Swap the in-memory store for Postgres + Redis
-before testnet.
+MVP: in-memory state (swap for Postgres+Redis before testnet). The crypto
+(signing, challenge, Merkle) and chain wiring are real.
 """
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-app = FastAPI(title="Thicket Coordinator", version="0.1.0")
+from . import signing
+from .challenge import make_challenge, verify as verify_challenge
+from .chain import ChainBridge
+from .merkle import MerkleTree
+
+app = FastAPI(title="Thicket Coordinator", version="0.2.0")
+chain = ChainBridge()
 
 # --- config (move to env) ---
-HEARTBEAT_TIMEOUT_S = 90          # miss this long => considered offline
-CHALLENGE_INTERVAL_S = 600        # ~every 10 min, node must pass a real task
-REWARD_PER_MINUTE = 1.0          # THKT per verified online minute (tune!)
+HEARTBEAT_TIMEOUT_S = 90
+CHALLENGE_INTERVAL_S = 600
+CHALLENGE_SIZE = 128
+REWARD_PER_MINUTE = 1.0          # THKT per verified online minute (tune in economics pass!)
+MAX_FAILS_BEFORE_SLASH = 3
+SLASH_AMOUNT_WEI = 100 * 10**18  # portion of bond to slash per strike
 
 
-# --- in-memory state (replace with DB) ---
 @dataclass
 class Node:
     address: str
     node_id: str
     last_heartbeat: float = 0.0
-    online_since: float = 0.0
     contribution_minutes: float = 0.0
-    cumulative_reward: float = 0.0       # THKT owed all-time (the Merkle leaf)
-    pending_challenge: str | None = None
+    cumulative_reward: float = 0.0
+    pending_challenge_id: str | None = None
+    pending_seed: int = 0
     last_challenge_at: float = 0.0
     failed_challenges: int = 0
 
@@ -46,28 +50,31 @@ class Node:
 NODES: dict[str, Node] = {}
 
 
-# --- request models ---
 class RegisterReq(BaseModel):
     address: str
     node_id: str
-    signature: str  # signs node_id with the operator key; TODO verify on-chain bond
+    signature: str
 
 
 class HeartbeatReq(BaseModel):
     address: str
-    signature: str  # signs (address, timestamp); TODO verify ECDSA
+    timestamp: int
+    signature: str
 
 
 class ChallengeResultReq(BaseModel):
     address: str
     challenge_id: str
-    output_hash: str  # keccak of the deterministic inference output
+    output_hash: str
 
 
-# --- endpoints ---
 @app.post("/register")
 def register(req: RegisterReq):
-    # TODO: verify the operator has an active bond in NodeStaking on-chain.
+    msg = signing.register_message(req.address, req.node_id)
+    if not signing.verify(msg, req.signature, req.address):
+        raise HTTPException(401, "bad signature")
+    if not chain.is_bonded(req.address):
+        raise HTTPException(403, "operator not bonded on-chain")
     NODES[req.address] = Node(address=req.address, node_id=req.node_id)
     return {"ok": True, "reward_per_minute": REWARD_PER_MINUTE}
 
@@ -77,21 +84,25 @@ def heartbeat(req: HeartbeatReq):
     node = NODES.get(req.address)
     if not node:
         raise HTTPException(404, "not registered")
-    # TODO: verify req.signature against req.address.
-    now = time.time()
+    if not signing.fresh(req.timestamp):
+        raise HTTPException(400, "stale timestamp")
+    msg = signing.heartbeat_message(req.address, req.timestamp)
+    if not signing.verify(msg, req.signature, req.address):
+        raise HTTPException(401, "bad signature")
 
-    # Credit elapsed online time if the node was already online.
+    now = time.time()
     if node.last_heartbeat and (now - node.last_heartbeat) <= HEARTBEAT_TIMEOUT_S:
         node.contribution_minutes += (now - node.last_heartbeat) / 60.0
-    else:
-        node.online_since = now  # fresh online session
-
     node.last_heartbeat = now
 
-    # Time to challenge this node?
     challenge = None
-    if now - node.last_challenge_at >= CHALLENGE_INTERVAL_S:
-        challenge = _issue_challenge(node, now)
+    if now - node.last_challenge_at >= CHALLENGE_INTERVAL_S or node.last_challenge_at == 0:
+        seed = int(now * 1000) ^ hash(node.address) & 0xFFFFFFFF
+        ch = make_challenge(f"{node.address}:{int(now)}", seed=seed, size=CHALLENGE_SIZE)
+        node.pending_challenge_id = ch.challenge_id
+        node.pending_seed = seed
+        node.last_challenge_at = now
+        challenge = ch.to_dict()
 
     return {"ok": True, "minutes": round(node.contribution_minutes, 4), "challenge": challenge}
 
@@ -99,50 +110,42 @@ def heartbeat(req: HeartbeatReq):
 @app.post("/challenge/result")
 def challenge_result(req: ChallengeResultReq):
     node = NODES.get(req.address)
-    if not node or node.pending_challenge != req.challenge_id:
+    if not node or node.pending_challenge_id != req.challenge_id:
         raise HTTPException(400, "no such challenge")
-    # TODO: recompute expected output_hash for this seeded task and compare.
-    expected = _expected_output_hash(req.challenge_id)
-    if req.output_hash != expected:
+
+    ch = make_challenge(req.challenge_id, seed=node.pending_seed, size=CHALLENGE_SIZE)
+    if not verify_challenge(ch, req.output_hash):
         node.failed_challenges += 1
         node.contribution_minutes = 0.0  # void this window's earnings
-        # TODO: after N fails, call NodeStaking.slash() on-chain.
+        if node.failed_challenges >= MAX_FAILS_BEFORE_SLASH:
+            chain.slash(node.address, SLASH_AMOUNT_WEI, "repeated failed challenges")
+            node.failed_challenges = 0
         return {"ok": False, "reason": "wrong output", "fails": node.failed_challenges}
-    node.pending_challenge = None
+
+    node.pending_challenge_id = None
+    node.failed_challenges = 0
     return {"ok": True}
 
 
 @app.post("/epoch/close")
 def close_epoch():
-    """Convert accrued minutes to cumulative THKT and build the Merkle root."""
-    leaves: list[tuple[str, int]] = []
+    """Roll accrued minutes into cumulative THKT, publish the Merkle root."""
+    entries: list[tuple[str, int]] = []
     for node in NODES.values():
         node.cumulative_reward += node.contribution_minutes * REWARD_PER_MINUTE
         node.contribution_minutes = 0.0
         wei = int(node.cumulative_reward * 1e18)
         if wei > 0:
-            leaves.append((node.address, wei))
-    root = _merkle_root(leaves)
-    # TODO: send RewardsDistributor.publishRoot(root) via the publisher key.
-    return {"root": root, "accounts": len(leaves)}
+            entries.append((node.address, wei))
+
+    tree = MerkleTree(entries)
+    chain.publish_root(tree.root_hex())
+    return {"root": tree.root_hex(), "accounts": len(entries), "claims": tree.claims()}
 
 
-# --- helpers (stubs) ---
-def _issue_challenge(node: Node, now: float) -> dict:
-    challenge_id = f"{node.address}:{int(now)}"
-    node.pending_challenge = challenge_id
-    node.last_challenge_at = now
-    # TODO: real task spec — model id, seeded prompt, deadline.
-    return {"id": challenge_id, "type": "sd_turbo", "seed": int(now), "deadline_s": 60}
-
-
-def _expected_output_hash(challenge_id: str) -> str:
-    # TODO: run the same seeded task on a reference node, or use redundant
-    # cross-checking across multiple nodes and take the majority.
-    return "TODO"
-
-
-def _merkle_root(leaves: list[tuple[str, int]]) -> str:
-    # TODO: keccak256(abi.encodePacked(addr, amount)) leaves, sorted-pair tree
-    # matching OpenZeppelin MerkleProof.verify. Placeholder for now.
-    return "0x" + "00" * 32
+@app.get("/claims")
+def claims():
+    """Current claim table (address -> amount + proof) for the client UI."""
+    entries = [(n.address, int(n.cumulative_reward * 1e18))
+               for n in NODES.values() if n.cumulative_reward > 0]
+    return MerkleTree(entries).claims()

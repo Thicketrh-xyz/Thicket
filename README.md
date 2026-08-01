@@ -56,18 +56,33 @@ slash its bond. That's the anti-sybil core — no ZK required for the MVP.
 4. **Challenge system** — real inference task + result verification (anti-sybil core).
 5. **Economics + hardening** — emission schedule, slashing tuning, load test, **legal review before mainnet.**
 
-## Quick start (contracts)
+## Quick start
 
+**Contracts** (5 passing tests, incl. Python↔Solidity Merkle interop):
 ```bash
 cd contracts
 forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts
 forge test
 ```
 
-## Status
+**Coordinator + end-to-end simulation** (no chain needed — runs in DRY mode):
+```bash
+cd coordinator
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -m sim        # 4 nodes register, solve challenges, one liar gets slashed, epoch root published
+.venv/bin/python gen_fixture.py # regenerate the Solidity interop test from the Python tree
+.venv/bin/uvicorn app.main:app  # run the live API
+```
 
-Early scaffold. Skeletons compile-shaped with `TODO`s marking where real signing,
-the model runtime, and Merkle construction go. **Not audited. Not on mainnet.**
+## Status — the anti-sybil core is real and verified
+
+The hybrid loop works end-to-end:
+- **Signing** — real EIP-191. Nodes prove address control; coordinator recovers + checks freshness.
+- **Challenge** — deterministic seeded compute (`challenge.py`), verified by recomputation. Liars fail, earnings void, repeated fails → on-chain `slash`.
+- **Merkle** — OZ-compatible tree (`merkle.py`); a Python-generated proof **verifies on-chain** (`MerkleInterop.t.sol`).
+- **Chain bridge** — reads bonds, publishes roots, slashes; DRY mode when no RPC/key is set.
+
+Still stubbed for later: the challenge is integer matmul, not yet a real GPU model (swap behind `solve_challenge`); redundant/majority verification; Postgres+Redis for state; the Tauri desktop UI. **Not audited. Not on mainnet.**
 
 > ⚠️ A token with staking yield paid from a treasury has real legal/securities
 > implications. Get qualified counsel before any public mainnet launch. This repo is

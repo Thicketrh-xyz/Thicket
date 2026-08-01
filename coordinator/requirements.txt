@@ -3,4 +3,5 @@ uvicorn[standard]>=0.29
 pydantic>=2.6
 web3>=6.15
 eth-account>=0.11
+eth-utils>=4.0
 # add: psycopg[binary], redis, sqlalchemy when moving off in-memory state

@@ -1,0 +1,91 @@
+"""
+On-chain bridge to the Thicket contracts on Robinhood Chain.
+
+Reads operator bonds from NodeStaking, publishes reward roots to
+RewardsDistributor, and slashes misbehaving operators. All config comes from
+env so nothing secret is committed:
+
+    ROBINHOOD_RPC             https RPC URL
+    COORDINATOR_PRIVATE_KEY   publisher/slasher key (fund it; keep it in a KMS/HSM in prod)
+    STAKING_ADDRESS           deployed NodeStaking
+    DISTRIBUTOR_ADDRESS       deployed RewardsDistributor
+
+If web3/env aren't configured, ChainBridge runs in DRY mode: it logs what it
+*would* send instead of transacting, so the coordinator + simulator work
+with no chain attached.
+"""
+from __future__ import annotations
+
+import os
+
+try:
+    from web3 import Web3
+    _WEB3 = True
+except ImportError:  # keeps the coordinator importable without web3 installed
+    _WEB3 = False
+
+_STAKING_ABI = [
+    {"name": "operators", "type": "function", "stateMutability": "view",
+     "inputs": [{"name": "", "type": "address"}],
+     "outputs": [{"name": "registered", "type": "bool"},
+                 {"name": "selfStake", "type": "uint256"},
+                 {"name": "delegatedStake", "type": "uint256"},
+                 {"name": "nodeId", "type": "bytes32"}]},
+    {"name": "slash", "type": "function", "stateMutability": "nonpayable",
+     "inputs": [{"name": "operator", "type": "address"},
+                {"name": "amount", "type": "uint256"},
+                {"name": "reason", "type": "string"}], "outputs": []},
+]
+_DISTRIBUTOR_ABI = [
+    {"name": "publishRoot", "type": "function", "stateMutability": "nonpayable",
+     "inputs": [{"name": "root", "type": "bytes32"}], "outputs": []},
+]
+
+
+class ChainBridge:
+    def __init__(self):
+        self.rpc = os.getenv("ROBINHOOD_RPC")
+        self.key = os.getenv("COORDINATOR_PRIVATE_KEY")
+        self.staking_addr = os.getenv("STAKING_ADDRESS")
+        self.distributor_addr = os.getenv("DISTRIBUTOR_ADDRESS")
+        self.dry = not (_WEB3 and self.rpc and self.key and self.staking_addr and self.distributor_addr)
+
+        if not self.dry:
+            self.w3 = Web3(Web3.HTTPProvider(self.rpc))
+            self.acct = self.w3.eth.account.from_key(self.key)
+            self.staking = self.w3.eth.contract(
+                address=Web3.to_checksum_address(self.staking_addr), abi=_STAKING_ABI)
+            self.distributor = self.w3.eth.contract(
+                address=Web3.to_checksum_address(self.distributor_addr), abi=_DISTRIBUTOR_ABI)
+
+    # --- reads ---
+    def is_bonded(self, address: str) -> bool:
+        """True if the operator has an active bond (skin in the game)."""
+        if self.dry:
+            return True  # trust in dry/sim mode
+        registered, self_stake, _, _ = self.staking.functions.operators(
+            Web3.to_checksum_address(address)).call()
+        return registered and self_stake > 0
+
+    # --- writes ---
+    def publish_root(self, root_hex: str):
+        if self.dry:
+            print(f"[chain:DRY] publishRoot({root_hex})")
+            return None
+        return self._send(self.distributor.functions.publishRoot(bytes.fromhex(root_hex[2:])))
+
+    def slash(self, operator: str, amount_wei: int, reason: str):
+        if self.dry:
+            print(f"[chain:DRY] slash({operator}, {amount_wei}, {reason!r})")
+            return None
+        return self._send(self.staking.functions.slash(
+            Web3.to_checksum_address(operator), amount_wei, reason))
+
+    def _send(self, fn):
+        tx = fn.build_transaction({
+            "from": self.acct.address,
+            "nonce": self.w3.eth.get_transaction_count(self.acct.address),
+        })
+        signed = self.acct.sign_transaction(tx)
+        h = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+        return self.w3.to_hex(h)

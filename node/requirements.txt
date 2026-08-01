@@ -1,5 +1,6 @@
 requests>=2.31
 eth-account>=0.11
-# model runtime — pick one before testnet:
+eth-utils>=4.0
+# model runtime — pick one before testnet to replace the matmul challenge:
 #   torch + diffusers   (SD-Turbo image challenges)
 #   onnxruntime-gpu     (lighter, cross-vendor GPU)
