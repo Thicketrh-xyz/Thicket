@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Header } from "./components/Header";
-import { Hero } from "./components/Hero";
+import { Hero, Stats } from "./components/Hero";
 import { Dashboard } from "./components/Dashboard";
 import { StakePanel } from "./components/StakePanel";
 import { HowItWorks } from "./components/HowItWorks";
@@ -8,7 +8,7 @@ import { connect, hasWallet } from "./lib/chain";
 
 export default function App() {
   const [session, setSession] = useState(null); // { provider, signer, address }
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState("light");
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -38,6 +38,7 @@ export default function App() {
         onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
       />
       <Hero onConnect={onConnect} />
+      <Stats />
       <Dashboard session={session} notify={notify} />
       <StakePanel session={session} notify={notify} />
       <HowItWorks />
