@@ -8,10 +8,33 @@ export function hasWallet() {
   return typeof window !== "undefined" && !!window.ethereum;
 }
 
+// Ensure the wallet is on Robinhood Chain Testnet — switch, or add it if unknown.
+export async function ensureNetwork() {
+  if (!hasWallet()) return;
+  const { chainIdHex, chainName, rpcUrls, blockExplorerUrls, nativeCurrency } = config.chain;
+  try {
+    await window.ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: chainIdHex }],
+    });
+  } catch (e) {
+    // 4902 = chain not added to the wallet yet
+    if (e.code === 4902 || (e.data && e.data.originalError && e.data.originalError.code === 4902)) {
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [{ chainId: chainIdHex, chainName, rpcUrls, blockExplorerUrls, nativeCurrency }],
+      });
+    } else {
+      throw e;
+    }
+  }
+}
+
 export async function connect() {
   if (!hasWallet()) throw new Error("No wallet found. Install MetaMask.");
+  await window.ethereum.request({ method: "eth_requestAccounts" });
+  await ensureNetwork();
   const provider = new BrowserProvider(window.ethereum);
-  await provider.send("eth_requestAccounts", []);
   const signer = await provider.getSigner();
   return { provider, signer, address: await signer.getAddress() };
 }

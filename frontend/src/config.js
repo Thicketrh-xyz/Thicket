@@ -1,12 +1,15 @@
 // Thicket frontend config. Fill addresses after deploying to Robinhood Chain.
+const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || 46630); // Robinhood Chain Testnet
+
 export const config = {
   coordinatorBase: "/api", // proxied to the FastAPI coordinator in dev
   chain: {
-    // Robinhood Chain — fill in real values before testnet.
-    chainId: 0, // e.g. 0x... hex or decimal
-    chainName: "Robinhood Chain",
-    rpcUrls: [import.meta.env.VITE_RPC_URL || ""],
-    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+    chainId: CHAIN_ID,
+    chainIdHex: "0x" + CHAIN_ID.toString(16), // 46630 -> 0xb626
+    chainName: "Robinhood Chain Testnet",
+    rpcUrls: [import.meta.env.VITE_RPC_URL || "https://rpc.testnet.chain.robinhood.com/rpc"],
+    blockExplorerUrls: ["https://explorer.testnet.chain.robinhood.com"],
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   },
   contracts: {
     token: import.meta.env.VITE_TOKEN_ADDRESS || "",
@@ -14,6 +17,9 @@ export const config = {
     distributor: import.meta.env.VITE_DISTRIBUTOR_ADDRESS || "",
   },
 };
+
+export const explorerTx = (hash) => `${config.chain.blockExplorerUrls[0]}/tx/${hash}`;
+export const explorerAddr = (addr) => `${config.chain.blockExplorerUrls[0]}/address/${addr}`;
 
 // When no wallet/coordinator/contracts are wired, the app runs in demo mode
 // so it still renders something real-looking for screenshots and design.
