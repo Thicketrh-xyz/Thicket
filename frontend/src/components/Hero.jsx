@@ -8,7 +8,6 @@ export function Hero({ onConnect }) {
     <section className="hero">
       <div className="container">
         <div className="hero-inner">
-          <span className="pill"><span className="live" /> Live on Robinhood Chain testnet</span>
           <h1>
             Grow the network.<br />
             <span className="accent">Earn from your GPU.</span>

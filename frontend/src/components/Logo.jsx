@@ -33,16 +33,26 @@ export function CircuitForest() {
     const branches = 2 + Math.round(t * 6);
     const op = 0.28 + t * 0.5;           // denser/darker green toward the right
     const stroke = i % 3 === 0 ? "var(--lime-yellow)" : "var(--lime)";
+    const trunkPath = `M${x} ${BASE} V${BASE - h}`;
+    const delay = `${(t * 2.6).toFixed(2)}s`;
     const parts = [];
-    parts.push(<path key="trunk" d={`M${x} ${BASE} V${BASE - h}`} />);
+    parts.push(<path key="trunk" d={trunkPath} />);
+    // bright signal traveling up the trunk (staggered per tree)
+    parts.push(<path key="sig" className="forest-signal" d={trunkPath} style={{ animationDelay: delay }} />);
     for (let b = 0; b < branches; b++) {
       const by = BASE - h + 12 + b * ((h - 18) / (branches + 0.5));
       const dir = b % 2 === 0 ? -1 : 1;
       const len = 8 + (b % 3) * 4;
       parts.push(<path key={`b${b}`} d={`M${x} ${by} l${dir * len} -${len - 2}`} />);
-      parts.push(<circle key={`n${b}`} cx={x + dir * (len + 2)} cy={by - (len - 2)} r="2.4" fill={stroke} stroke="none" />);
+      parts.push(
+        <circle key={`n${b}`} className="forest-node" cx={x + dir * (len + 2)} cy={by - (len - 2)} r="2.4"
+          fill={stroke} stroke="none" style={{ animationDelay: `${((t + b * 0.3) % 2.6).toFixed(2)}s` }} />
+      );
     }
-    parts.push(<circle key="tip" cx={x} cy={BASE - h} r="2.8" fill={stroke} stroke="none" />);
+    parts.push(
+      <circle key="tip" className="forest-node" cx={x} cy={BASE - h} r="2.8" fill={stroke} stroke="none"
+        style={{ animationDelay: delay }} />
+    );
     trees.push(
       <g key={i} stroke={stroke} strokeWidth="1.5" strokeLinecap="round" opacity={op}>
         {parts}

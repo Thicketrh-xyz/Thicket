@@ -2,10 +2,10 @@
    matching the logo/banner. Clean, organic, airy — deliberately not a dark
    crypto-terminal look. Tokens mirror ../../brand/theme.css. */
 :root {
-  /* brand greens sampled from the logo + banner gradient */
-  --lime: #a3ce3a;          /* core logo lime — fills, graphics */
-  --lime-yellow: #c7dc34;   /* banner's lighter/left trees */
-  --lime-bright: #b6e04a;
+  /* brand greens sampled from the logo + banner gradient (lightened to match logo) */
+  --lime: #b7d637;          /* core logo lime — fills, graphics */
+  --lime-yellow: #d0e23c;   /* banner's lighter/left trees */
+  --lime-bright: #c8e64f;
   --lime-deep: #6f9526;     /* readable lime for text on white */
   --lime-strong: #5c7d1f;   /* body-emphasis green, passes contrast */
   --ink: #1a1e12;
@@ -97,6 +97,29 @@ a:hover { text-decoration: underline; }
 .hero p.lead { font-size: 1.25rem; color: var(--text-muted); margin: 0 0 30px; max-width: 32ch; }
 .hero-cta { display: flex; gap: 14px; flex-wrap: wrap; }
 .hero-forest { position: absolute; left: 0; right: 0; bottom: -1px; width: 100%; height: auto; z-index: 1; pointer-events: none; }
+
+/* animated "signal" flowing up each circuit-tree trunk, + softly pulsing nodes */
+.forest-signal {
+  stroke: var(--lime-bright);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  fill: none;
+  stroke-dasharray: 18 600;
+  animation: flow 3.2s linear infinite;
+}
+@keyframes flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -618; } }
+.forest-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: nodePulse 2.6s ease-in-out infinite;
+}
+@keyframes nodePulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50%      { opacity: 1;   transform: scale(1.15); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .forest-signal, .forest-node { animation: none; }
+}
 
 .pill {
   display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 700;
