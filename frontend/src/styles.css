@@ -180,7 +180,41 @@ a:hover { text-decoration: underline; }
 .step .t { font-weight: 700; margin-bottom: 5px; font-size: 1.05rem; }
 .step .d { color: var(--text-muted); font-size: 0.94rem; }
 
-.footer { border-top: 1px solid var(--border); padding: 30px 0; color: var(--text-muted); font-size: 0.92rem; }
+/* feature / capability 3-col grids */
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.feature { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; box-shadow: var(--shadow); }
+.feature .ic { display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 13px;
+  background: color-mix(in srgb, var(--accent) 18%, white); border: 1px solid color-mix(in srgb, var(--accent) 38%, white); margin-bottom: 14px; }
+:root[data-theme="dark"] .feature .ic { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.feature h3 { margin: 0 0 6px; font-size: 1.15rem; }
+.feature p { margin: 0; color: var(--text-muted); font-size: 0.96rem; }
+
+/* roadmap — botanical phases */
+.roadmap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.phase { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); position: relative; }
+.phase .tag { display: inline-block; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; margin-bottom: 12px; }
+.phase.done .tag { background: color-mix(in srgb, var(--accent) 22%, white); color: var(--accent-ink); }
+.phase.current .tag { background: var(--accent); color: #14180c; }
+.phase.next .tag { background: var(--mist-2); color: var(--text-muted); }
+:root[data-theme="dark"] .phase.done .tag { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+:root[data-theme="dark"] .phase.next .tag { background: var(--bg); }
+.phase h3 { margin: 0 0 8px; font-size: 1.15rem; }
+.phase ul { margin: 0; padding-left: 18px; color: var(--text-muted); font-size: 0.92rem; }
+.phase li { margin-bottom: 5px; }
+
+/* participate CTA cards */
+.cta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.cta-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.cta-card h3 { margin: 0 0 6px; font-size: 1.25rem; }
+.cta-card p { margin: 0 0 20px; color: var(--text-muted); font-size: 0.96rem; flex: 1; }
+
+.footer { border-top: 1px solid var(--border); padding: 44px 0 30px; color: var(--text-muted); font-size: 0.92rem; background: var(--bg-panel); }
+.footer-cols { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 28px; margin-bottom: 28px; }
+.footer-cols .brand { margin-bottom: 10px; }
+.footer-cols h4 { color: var(--text); font-size: 0.9rem; margin: 0 0 12px; }
+.footer-cols a { display: block; color: var(--text-muted); font-weight: 500; margin-bottom: 9px; }
+.footer-cols a:hover { color: var(--accent-ink); text-decoration: none; }
+.footer-bottom { border-top: 1px solid var(--border); padding-top: 20px; }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   background: var(--ink); color: #f6f8ee; padding: 13px 20px; border-radius: 12px; font-size: 0.92rem; z-index: 60;
   box-shadow: 0 16px 40px -12px rgba(0,0,0,0.4); }
@@ -191,5 +225,7 @@ a:hover { text-decoration: underline; }
   .stats { grid-template-columns: 1fr; }
   .grid2 { grid-template-columns: 1fr; }
   .steps { grid-template-columns: 1fr 1fr; }
+  .features, .roadmap, .cta-grid { grid-template-columns: 1fr; }
+  .footer-cols { grid-template-columns: 1fr 1fr; }
   .nav a:not(.btn) { display: none; }
 }

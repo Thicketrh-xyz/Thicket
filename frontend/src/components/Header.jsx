@@ -10,9 +10,10 @@ export function Header({ address, onConnect, onToggleTheme }) {
           <span className="name">Thicket</span>
         </div>
         <nav className="nav">
+          <a href="#how">How it works</a>
+          <a href="#roadmap">Roadmap</a>
           <a href="#dashboard">Dashboard</a>
           <a href="#stake">Stake</a>
-          <a href="#how">How it works</a>
           <button className="btn ghost sm" onClick={onToggleTheme} title="Toggle theme">◐</button>
           <button className="btn sm" onClick={onConnect}>
             {short || "Connect Wallet"}

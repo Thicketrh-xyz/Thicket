@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { Header } from "./components/Header";
 import { Hero, Stats } from "./components/Hero";
+import { WhyThicket, Capabilities } from "./components/Features";
 import { Dashboard } from "./components/Dashboard";
 import { StakePanel } from "./components/StakePanel";
 import { HowItWorks } from "./components/HowItWorks";
+import { Roadmap } from "./components/Roadmap";
+import { Participate } from "./components/Participate";
+import { Footer } from "./components/Footer";
 import { connect, hasWallet } from "./lib/chain";
 
 export default function App() {
@@ -39,15 +43,14 @@ export default function App() {
       />
       <Hero onConnect={onConnect} />
       <Stats />
+      <WhyThicket />
+      <HowItWorks />
+      <Capabilities />
+      <Roadmap />
       <Dashboard session={session} notify={notify} />
       <StakePanel session={session} notify={notify} />
-      <HowItWorks />
-      <footer className="footer">
-        <div className="container row">
-          <span>🌿 Thicket — decentralized GPU network on Robinhood Chain</span>
-          <span>Testnet · not audited</span>
-        </div>
-      </footer>
+      <Participate onConnect={onConnect} />
+      <Footer />
       {toast && <div className="toast">{toast}</div>}
     </>
   );
