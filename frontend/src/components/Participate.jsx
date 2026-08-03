@@ -1,4 +1,4 @@
-export function Participate({ onConnect }) {
+export function Participate({ onRunNode }) {
   return (
     <section className="section mist" id="participate">
       <div className="container">
@@ -8,7 +8,7 @@ export function Participate({ onConnect }) {
           <div className="cta-card">
             <h3>Run a node</h3>
             <p>Share a spare GPU, pass challenges, and earn THKT for every verified minute you're online.</p>
-            <button className="btn" onClick={onConnect}>Connect &amp; run</button>
+            <button className="btn" onClick={onRunNode}>Run a node</button>
           </div>
           <div className="cta-card">
             <h3>Delegate &amp; earn</h3>

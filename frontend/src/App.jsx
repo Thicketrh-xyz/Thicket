@@ -8,12 +8,15 @@ import { HowItWorks } from "./components/HowItWorks";
 import { Roadmap } from "./components/Roadmap";
 import { Participate } from "./components/Participate";
 import { Footer } from "./components/Footer";
+import { NodeGuide } from "./components/NodeGuide";
 import { connect, hasWallet } from "./lib/chain";
+import { CONTRACTS_LIVE } from "./config";
 
 export default function App() {
   const [session, setSession] = useState(null); // { provider, signer, address }
   const [theme, setTheme] = useState("light");
   const [toast, setToast] = useState(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -34,6 +37,8 @@ export default function App() {
     }
   }
 
+  const openGuide = () => setGuideOpen(true);
+
   return (
     <>
       <Header
@@ -41,7 +46,12 @@ export default function App() {
         onConnect={onConnect}
         onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
       />
-      <Hero onConnect={onConnect} />
+      {!CONTRACTS_LIVE && (
+        <div className="demo-banner">
+          <b>Demo mode</b> — contracts aren't deployed to testnet yet, so figures are illustrative and on-chain actions are disabled. See <a href="#how">how it works</a>.
+        </div>
+      )}
+      <Hero onRunNode={openGuide} />
       <Stats />
       <WhyThicket />
       <HowItWorks />
@@ -49,8 +59,9 @@ export default function App() {
       <Roadmap />
       <Dashboard session={session} notify={notify} />
       <StakePanel session={session} notify={notify} />
-      <Participate onConnect={onConnect} />
+      <Participate onRunNode={openGuide} />
       <Footer />
+      <NodeGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
       {toast && <div className="toast">{toast}</div>}
     </>
   );

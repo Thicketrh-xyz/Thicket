@@ -3,7 +3,7 @@ import { DEMO } from "../config";
 
 const fmt = (n) => n.toLocaleString("en-US");
 
-export function Hero({ onConnect }) {
+export function Hero({ onRunNode }) {
   return (
     <section className="hero">
       <div className="container">
@@ -17,7 +17,7 @@ export function Hero({ onConnect }) {
             verified minute you're online.
           </p>
           <div className="hero-cta">
-            <button className="btn" onClick={onConnect}>Connect &amp; run a node</button>
+            <button className="btn" onClick={onRunNode}>Run a node</button>
             <a className="btn ghost" href="#how">How it works</a>
           </div>
         </div>

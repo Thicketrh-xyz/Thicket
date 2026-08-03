@@ -21,6 +21,11 @@ export const config = {
 export const explorerTx = (hash) => `${config.chain.blockExplorerUrls[0]}/tx/${hash}`;
 export const explorerAddr = (addr) => `${config.chain.blockExplorerUrls[0]}/address/${addr}`;
 
+// True only once contracts are deployed and their addresses are in the env.
+export const CONTRACTS_LIVE = Boolean(
+  config.contracts.token && config.contracts.staking && config.contracts.distributor
+);
+
 // When no wallet/coordinator/contracts are wired, the app runs in demo mode
 // so it still renders something real-looking for screenshots and design.
 export const DEMO = {
