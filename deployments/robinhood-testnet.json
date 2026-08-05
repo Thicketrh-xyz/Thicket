@@ -1,0 +1,14 @@
+{
+  "network": "Robinhood Chain Testnet",
+  "chainId": 46630,
+  "rpc": "https://rpc.testnet.chain.robinhood.com/rpc",
+  "explorer": "https://explorer.testnet.chain.robinhood.com",
+  "contracts": {
+    "ThicketToken": "0xac2763ede29a967b490293f5276ac8042acb35c1",
+    "NodeStaking": "0x002497526d249f31f0ba5cb30627228c3b9b4e39",
+    "RewardsDistributor": "0xfe03bc178cff2149e84b4babb399083e31c637e2"
+  },
+  "owner": "0x14aA5E299c0D9d0F3Eb98442eAB6A0FDBDec779C",
+  "coordinator_publisher_slasher": "0x14aA5E299c0D9d0F3Eb98442eAB6A0FDBDec779C",
+  "token": { "name": "Thicket", "symbol": "THKT", "initialSupply": "10000000", "minOperatorStake": "1000" }
+}
