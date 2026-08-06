@@ -49,10 +49,11 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
             <div className="num">{CONTRACTS_LIVE ? "2" : "3"}</div>
             <div>
               <h4>Run the node client</h4>
-              <p>On the machine with the GPU. It registers (bonding THKT), heartbeats, and solves challenges — earnings then show on your dashboard here.</p>
+              <p>On the machine with the GPU. Set your wallet key in node/.env — the node bonds THKT as an operator, then heartbeats and solves challenges. Earnings show on your dashboard here.</p>
               <div className="code">{`cd node
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m thicket_node.client`}</div>
+cp .env.example .env        # set THICKET_PRIVATE_KEY (fund it with THKT + gas)
+.venv/bin/python -u -m thicket_node.client`}</div>
             </div>
           </div>
 

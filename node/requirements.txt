@@ -1,6 +1,8 @@
 requests>=2.31
 eth-account>=0.11
 eth-utils>=4.0
+web3>=6.15
+python-dotenv>=1.0
 # model runtime — pick one before testnet to replace the matmul challenge:
 #   torch + diffusers   (SD-Turbo image challenges)
 #   onnxruntime-gpu     (lighter, cross-vendor GPU)

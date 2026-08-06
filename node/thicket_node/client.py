@@ -1,13 +1,14 @@
 """
 Thicket Node — the client users run to earn THKT.
 
-Loop: register (signed) -> heartbeat every 30s (signed) -> when the
-coordinator hands back a challenge, run it locally and submit the result.
-Earnings accrue server-side; the user claims THKT on-chain from the UI.
+Flow: load wallet from node/.env -> bond as operator on-chain (if configured)
+-> register with the coordinator (signed) -> heartbeat every N seconds ->
+solve verification challenges the coordinator issues.
 
-The challenge solver here is intentionally the SAME function the coordinator
-uses to verify — see thicket_node/work.py. Swap it for a real GPU model
-runtime later without touching this loop.
+Run:
+    cd node
+    cp .env.example .env        # set THICKET_PRIVATE_KEY (and fund it)
+    python -u -m thicket_node.client
 """
 from __future__ import annotations
 
@@ -17,18 +18,18 @@ import requests
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
+from .bond import ensure_bonded
+from .config import config
 from .work import solve_challenge
-
-COORDINATOR_URL = "http://localhost:8000"
-HEARTBEAT_INTERVAL = 30
 
 
 class ThicketNode:
-    def __init__(self, private_key: str, node_id: str, coordinator: str = COORDINATOR_URL):
-        self.acct = Account.from_key(private_key)
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.acct = Account.from_key(cfg.private_key)
         self.address = self.acct.address
-        self.node_id = node_id
-        self.coordinator = coordinator
+        self.node_id = cfg.node_id
+        self.coordinator = cfg.coordinator_url
 
     def _sign(self, message: str) -> str:
         return self.acct.sign_message(encode_defunct(text=message)).signature.hex()
@@ -42,13 +43,15 @@ class ThicketNode:
         print(f"[thicket] registered {self.address} — {r.json()['reward_per_minute']} THKT/min")
 
     def run(self) -> None:
+        print(f"[thicket] node {self.address} (id={self.node_id})")
+        print(f"[thicket] {ensure_bonded(self.cfg, self.acct)}")
         self.register()
         while True:
             try:
                 self._beat()
             except Exception as e:  # noqa: BLE001 — keep the node alive
                 print(f"[thicket] heartbeat error: {e}")
-            time.sleep(HEARTBEAT_INTERVAL)
+            time.sleep(self.cfg.heartbeat_interval)
 
     def _beat(self) -> None:
         ts = int(time.time())
@@ -65,12 +68,22 @@ class ThicketNode:
     def _handle_challenge(self, challenge: dict) -> None:
         print(f"[thicket] challenge {challenge['id']} — solving {challenge['type']}")
         output_hash = solve_challenge(challenge)
-        requests.post(f"{self.coordinator}/challenge/result",
-                      json={"address": self.address, "challenge_id": challenge["id"],
-                            "output_hash": output_hash}, timeout=120)
+        r = requests.post(f"{self.coordinator}/challenge/result",
+                          json={"address": self.address, "challenge_id": challenge["id"],
+                                "output_hash": output_hash}, timeout=120)
+        ok = r.ok and r.json().get("ok")
+        print(f"[thicket] challenge {'passed' if ok else 'FAILED'}")
+
+
+def main() -> None:
+    if not config.private_key:
+        raise SystemExit(
+            "No wallet key. Set THICKET_PRIVATE_KEY in node/.env (see node/.env.example).\n"
+            "Generate one with:  python -c \"from eth_account import Account; a=Account.create(); "
+            "print(a.address, a.key.hex())\""
+        )
+    ThicketNode(config).run()
 
 
 if __name__ == "__main__":
-    # Dev key — DO NOT use on mainnet. Generate/import a real key for prod.
-    node = ThicketNode(private_key="0x" + "11" * 32, node_id="node-1")
-    node.run()
+    main()
