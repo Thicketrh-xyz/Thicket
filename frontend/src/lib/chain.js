@@ -1,6 +1,6 @@
 // Wallet + contract wiring via ethers v6. All calls no-op gracefully if a
 // wallet or contract address is missing, so the app still runs in demo mode.
-import { BrowserProvider, Contract, encodeBytes32String, parseUnits } from "ethers";
+import { BrowserProvider, Contract, id, parseUnits } from "ethers";
 import { config } from "../config";
 import { TOKEN_ABI, STAKING_ABI, DISTRIBUTOR_ABI } from "./abi";
 
@@ -50,6 +50,28 @@ export async function getTokenBalance(signer, address) {
   return t.balanceOf(address);
 }
 
+// One read for everything the Stake panel needs: THKT balance, the min bond,
+// current operator status, and how much THKT is already approved.
+export async function getStakingInfo(signer, address) {
+  const token = contract(config.contracts.token, TOKEN_ABI, signer);
+  const staking = contract(config.contracts.staking, STAKING_ABI, signer);
+  if (!token || !staking) return null;
+  const [balance, minStake, op, allowance] = await Promise.all([
+    token.balanceOf(address),
+    staking.minOperatorStake(),
+    staking.operators(address),
+    token.allowance(address, config.contracts.staking),
+  ]);
+  return {
+    balance,
+    minStake,
+    allowance,
+    registered: op.registered,
+    selfStake: op.selfStake,
+    delegatedStake: op.delegatedStake,
+  };
+}
+
 // Claim accrued THKT using the coordinator-provided cumulative amount + proof.
 export async function claimRewards(signer, address, cumulativeAmount, proof) {
   const d = contract(config.contracts.distributor, DISTRIBUTOR_ABI, signer);
@@ -58,24 +80,37 @@ export async function claimRewards(signer, address, cumulativeAmount, proof) {
   return tx.wait();
 }
 
-// Bond THKT to register as an operator (approve -> registerOperator).
-export async function registerOperator(signer, nodeId, amountThkt) {
+// Approve THKT for the staking contract only if the current allowance is short.
+// onStatus reports each step so the UI can show "Approving…" then "Bonding…".
+async function approveIfNeeded(token, owner, amount, onStatus) {
+  const allowance = await token.allowance(owner, config.contracts.staking);
+  if (allowance < amount) {
+    onStatus("Approving THKT…");
+    await (await token.approve(config.contracts.staking, amount)).wait();
+  }
+}
+
+// Bond THKT to register as an operator. nodeId is hashed to bytes32 the same
+// way the node client does (keccak256), so a UI-bonded operator matches its node.
+export async function registerOperator(signer, nodeId, amountThkt, onStatus = () => {}) {
   const amount = parseUnits(String(amountThkt), 18);
   const token = contract(config.contracts.token, TOKEN_ABI, signer);
   const staking = contract(config.contracts.staking, STAKING_ABI, signer);
   if (!token || !staking) throw new Error("Contracts not configured");
-  await (await token.approve(config.contracts.staking, amount)).wait();
-  const tx = await staking.registerOperator(encodeBytes32String(nodeId.slice(0, 31)), amount);
-  return tx.wait();
+  await approveIfNeeded(token, await signer.getAddress(), amount, onStatus);
+  onStatus("Bonding…");
+  const receipt = await (await staking.registerOperator(id(nodeId), amount)).wait();
+  return receipt.hash;
 }
 
 // Delegate THKT to an operator (approve -> delegate).
-export async function delegate(signer, operator, amountThkt) {
+export async function delegate(signer, operator, amountThkt, onStatus = () => {}) {
   const amount = parseUnits(String(amountThkt), 18);
   const token = contract(config.contracts.token, TOKEN_ABI, signer);
   const staking = contract(config.contracts.staking, STAKING_ABI, signer);
   if (!token || !staking) throw new Error("Contracts not configured");
-  await (await token.approve(config.contracts.staking, amount)).wait();
-  const tx = await staking.delegate(operator, amount);
-  return tx.wait();
+  await approveIfNeeded(token, await signer.getAddress(), amount, onStatus);
+  onStatus("Delegating…");
+  const receipt = await (await staking.delegate(operator, amount)).wait();
+  return receipt.hash;
 }
