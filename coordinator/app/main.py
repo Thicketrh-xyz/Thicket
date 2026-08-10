@@ -4,50 +4,59 @@ Thicket Coordinator — the off-chain brain of the hybrid DePIN loop.
   1. Register nodes (verify EIP-191 signature + on-chain bond).
   2. Accrue "contribution minutes" per wallet from signed heartbeats.
   3. Issue random verifiable challenges; void earnings / slash on failure.
-  4. At epoch close, build a cumulative-reward Merkle root and publish it.
+  4. Settle epochs on a schedule: build a cumulative Merkle root and publish it.
 
-MVP: in-memory state (swap for Postgres+Redis before testnet). The crypto
-(signing, challenge, Merkle) and chain wiring are real.
+State is persisted (SQLite locally, Postgres in prod) so restarts don't lose
+data and the service can be hosted. Epoch settlement runs on a scheduler.
 """
 from __future__ import annotations
 
+import os
+import secrets
 import time
-from dataclasses import dataclass
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from . import signing
 from .challenge import make_challenge, verify as verify_challenge
-from .chain import ChainBridge
-from .merkle import MerkleTree
+from .db import Node, SessionLocal, init_db
+from .epoch import EPOCH_SECONDS, chain_bridge, close_epoch, current_claims, start_scheduler
 
-app = FastAPI(title="Thicket Coordinator", version="0.2.0")
-chain = ChainBridge()
+app = FastAPI(title="Thicket Coordinator", version="0.3.0")
 
-# --- config (move to env) ---
-HEARTBEAT_TIMEOUT_S = 90
-CHALLENGE_INTERVAL_S = 600
-CHALLENGE_SIZE = 128
-REWARD_PER_MINUTE = 1.0          # THKT per verified online minute (tune in economics pass!)
-MAX_FAILS_BEFORE_SLASH = 3
-SLASH_AMOUNT_WEI = 100 * 10**18  # portion of bond to slash per strike
+_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins or ["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+# --- config ---
+HEARTBEAT_TIMEOUT_S = int(os.getenv("HEARTBEAT_TIMEOUT_S", "90"))
+CHALLENGE_INTERVAL_S = int(os.getenv("CHALLENGE_INTERVAL_S", "600"))
+CHALLENGE_SIZE = int(os.getenv("CHALLENGE_SIZE", "128"))
+MAX_FAILS_BEFORE_SLASH = int(os.getenv("MAX_FAILS_BEFORE_SLASH", "3"))
+SLASH_AMOUNT_WEI = int(float(os.getenv("SLASH_AMOUNT_THKT", "100")) * 10**18)
 
-@dataclass
-class Node:
-    address: str
-    node_id: str
-    last_heartbeat: float = 0.0
-    contribution_minutes: float = 0.0
-    cumulative_reward: float = 0.0
-    pending_challenge_id: str | None = None
-    pending_seed: int = 0
-    last_challenge_at: float = 0.0
-    failed_challenges: int = 0
+chain = chain_bridge()
 
 
-NODES: dict[str, Node] = {}
+@app.on_event("startup")
+def _startup():
+    init_db()
+    start_scheduler()
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 class RegisterReq(BaseModel):
@@ -68,26 +77,33 @@ class ChallengeResultReq(BaseModel):
     output_hash: str
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok", "dry": chain.dry, "epoch_seconds": EPOCH_SECONDS}
+
+
 @app.post("/register")
-def register(req: RegisterReq):
+def register(req: RegisterReq, db: Session = Depends(get_db)):
     msg = signing.register_message(req.address, req.node_id)
     if not signing.verify(msg, req.signature, req.address):
         raise HTTPException(401, "bad signature")
     if not chain.is_bonded(req.address):
         raise HTTPException(403, "operator not bonded on-chain")
-    NODES[req.address] = Node(address=req.address, node_id=req.node_id)
-    return {"ok": True, "reward_per_minute": REWARD_PER_MINUTE}
+    node = db.get(Node, req.address) or Node(address=req.address)
+    node.node_id = req.node_id
+    db.merge(node)
+    db.commit()
+    return {"ok": True, "reward_per_minute": float(os.getenv("REWARD_PER_MINUTE", "1.0"))}
 
 
 @app.post("/heartbeat")
-def heartbeat(req: HeartbeatReq):
-    node = NODES.get(req.address)
+def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
+    node = db.get(Node, req.address)
     if not node:
         raise HTTPException(404, "not registered")
     if not signing.fresh(req.timestamp):
         raise HTTPException(400, "stale timestamp")
-    msg = signing.heartbeat_message(req.address, req.timestamp)
-    if not signing.verify(msg, req.signature, req.address):
+    if not signing.verify(signing.heartbeat_message(req.address, req.timestamp), req.signature, req.address):
         raise HTTPException(401, "bad signature")
 
     now = time.time()
@@ -97,19 +113,20 @@ def heartbeat(req: HeartbeatReq):
 
     challenge = None
     if now - node.last_challenge_at >= CHALLENGE_INTERVAL_S or node.last_challenge_at == 0:
-        seed = int(now * 1000) ^ hash(node.address) & 0xFFFFFFFF
-        ch = make_challenge(f"{node.address}:{int(now)}", seed=seed, size=CHALLENGE_SIZE)
+        seed = secrets.randbits(62)
+        ch = make_challenge(f"{req.address}:{int(now)}", seed=seed, size=CHALLENGE_SIZE)
         node.pending_challenge_id = ch.challenge_id
         node.pending_seed = seed
         node.last_challenge_at = now
         challenge = ch.to_dict()
 
+    db.commit()
     return {"ok": True, "minutes": round(node.contribution_minutes, 4), "challenge": challenge}
 
 
 @app.post("/challenge/result")
-def challenge_result(req: ChallengeResultReq):
-    node = NODES.get(req.address)
+def challenge_result(req: ChallengeResultReq, db: Session = Depends(get_db)):
+    node = db.get(Node, req.address)
     if not node or node.pending_challenge_id != req.challenge_id:
         raise HTTPException(400, "no such challenge")
 
@@ -117,35 +134,25 @@ def challenge_result(req: ChallengeResultReq):
     if not verify_challenge(ch, req.output_hash):
         node.failed_challenges += 1
         node.contribution_minutes = 0.0  # void this window's earnings
-        if node.failed_challenges >= MAX_FAILS_BEFORE_SLASH:
+        fails = node.failed_challenges
+        if fails >= MAX_FAILS_BEFORE_SLASH:
             chain.slash(node.address, SLASH_AMOUNT_WEI, "repeated failed challenges")
             node.failed_challenges = 0
-        return {"ok": False, "reason": "wrong output", "fails": node.failed_challenges}
+        db.commit()
+        return {"ok": False, "reason": "wrong output", "fails": fails}
 
     node.pending_challenge_id = None
     node.failed_challenges = 0
+    db.commit()
     return {"ok": True}
 
 
 @app.post("/epoch/close")
-def close_epoch():
-    """Roll accrued minutes into cumulative THKT, publish the Merkle root."""
-    entries: list[tuple[str, int]] = []
-    for node in NODES.values():
-        node.cumulative_reward += node.contribution_minutes * REWARD_PER_MINUTE
-        node.contribution_minutes = 0.0
-        wei = int(node.cumulative_reward * 1e18)
-        if wei > 0:
-            entries.append((node.address, wei))
-
-    tree = MerkleTree(entries)
-    chain.publish_root(tree.root_hex())
-    return {"root": tree.root_hex(), "accounts": len(entries), "claims": tree.claims()}
+def epoch_close():
+    """Manual settlement (the scheduler also does this on EPOCH_SECONDS)."""
+    return close_epoch()
 
 
 @app.get("/claims")
 def claims():
-    """Current claim table (address -> amount + proof) for the client UI."""
-    entries = [(n.address, int(n.cumulative_reward * 1e18))
-               for n in NODES.values() if n.cumulative_reward > 0]
-    return MerkleTree(entries).claims()
+    return current_claims()

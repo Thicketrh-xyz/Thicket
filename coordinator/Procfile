@@ -1,0 +1,3 @@
+# PYTHONUNBUFFERED so stdout logs stream to Railway in real time.
+# --workers 1 because the epoch scheduler runs in-process (multiple workers would double-publish).
+web: PYTHONUNBUFFERED=1 uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1

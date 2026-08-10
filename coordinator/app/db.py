@@ -1,0 +1,65 @@
+"""
+Persistence for the coordinator. State that used to live in an in-memory dict
+now lives in a database, so restarts don't wipe contribution/epoch data and the
+service can be hosted for real.
+
+DATABASE_URL selects the backend:
+  - unset            -> SQLite file (./thicket.db) for local dev
+  - postgres://...   -> Postgres (Railway/production); normalized to postgresql://
+"""
+from __future__ import annotations
+
+import os
+
+from sqlalchemy import BigInteger, Float, Integer, String, create_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./thicket.db")
+if DATABASE_URL.startswith("postgres://"):  # SQLAlchemy wants postgresql://
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Node(Base):
+    __tablename__ = "nodes"
+
+    address: Mapped[str] = mapped_column(String(42), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(128), default="")
+    last_heartbeat: Mapped[float] = mapped_column(Float, default=0.0)       # epoch seconds
+    contribution_minutes: Mapped[float] = mapped_column(Float, default=0.0)
+    cumulative_reward: Mapped[float] = mapped_column(Float, default=0.0)    # THKT owed all-time
+    pending_challenge_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    pending_seed: Mapped[int] = mapped_column(BigInteger, default=0)
+    last_challenge_at: Mapped[float] = mapped_column(Float, default=0.0)
+    failed_challenges: Mapped[int] = mapped_column(Integer, default=0)
+
+
+def init_db() -> None:
+    Base.metadata.create_all(engine)
+
+
+def session_scope():
+    """Context-managed session: commits on success, rolls back on error."""
+    return _SessionCtx()
+
+
+class _SessionCtx:
+    def __enter__(self):
+        self.db = SessionLocal()
+        return self.db
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            if exc_type is None:
+                self.db.commit()
+            else:
+                self.db.rollback()
+        finally:
+            self.db.close()

@@ -78,6 +78,51 @@ REDIS_URL=redis://…                   # Phase B
 - Keep the publisher wallet **separate** from your main deployer/treasury wallet in production, funded only with gas.
 - Still **unaudited, testnet-only.** Public hosting doesn't change that — don't put real value behind it.
 
+## Deploy steps (durable / Phase B)
+
+Decided: **Railway** for the coordinator, **Postgres** for state (no Redis).
+
+### 1. Coordinator → Railway
+1. New Railway project → **Deploy from GitHub repo** (or `railway up` from `coordinator/`).
+   Set the service **Root Directory** to `coordinator/`. Railway auto-detects Python
+   (Nixpacks), installs `requirements.txt`, and runs the `Procfile`.
+2. Add the **Postgres** plugin. Railway injects `DATABASE_URL` into the service automatically.
+3. Set service variables:
+   ```
+   ROBINHOOD_RPC=https://rpc.testnet.chain.robinhood.com/rpc
+   COORDINATOR_PRIVATE_KEY=0x…            # publisher/slasher — SECRET
+   STAKING_ADDRESS=0x002497526d249f31f0ba5cb30627228c3b9b4e39
+   DISTRIBUTOR_ADDRESS=0xfe03bc178cff2149e84b4babb399083e31c637e2
+   EPOCH_SECONDS=3600
+   CORS_ORIGINS=https://<your-app>.vercel.app
+   ```
+4. Deploy. Confirm `GET https://<service>.up.railway.app/health` returns
+   `{"status":"ok","dry":false,…}`. `dry:false` means the publisher key is set and roots
+   post on-chain. Keep the publisher wallet funded with a little testnet ETH.
+   **Run a single instance / 1 worker** — the epoch scheduler runs in-process (the Procfile
+   pins `--workers 1`); multiple workers would double-publish.
+
+### 2. Frontend → Vercel
+1. Import the repo; set **Root Directory** to `frontend/`. Framework preset: Vite.
+   (`vercel.json` already sets build `npm run build` → `dist`.)
+2. Set Environment Variables (from `deployments/robinhood-testnet.json`):
+   ```
+   VITE_CHAIN_ID=46630
+   VITE_RPC_URL=https://rpc.testnet.chain.robinhood.com/rpc
+   VITE_TOKEN_ADDRESS=0xac2763ede29a967b490293f5276ac8042acb35c1
+   VITE_STAKING_ADDRESS=0x002497526d249f31f0ba5cb30627228c3b9b4e39
+   VITE_DISTRIBUTOR_ADDRESS=0xfe03bc178cff2149e84b4babb399083e31c637e2
+   VITE_COORDINATOR_URL=https://<service>.up.railway.app
+   ```
+   (Using `VITE_COORDINATOR_URL` is the simplest path — the browser calls the coordinator
+   directly, so make sure `CORS_ORIGINS` on Railway lists your Vercel origin. Alternatively
+   delete `VITE_COORDINATOR_URL` and edit `vercel.json`'s rewrite destination to the Railway
+   host to stay same-origin.)
+3. Deploy. Open the URL, connect wallet, bond, and watch earnings settle each epoch.
+
+### 3. Node clients (users)
+Distribute `node/`; users set `COORDINATOR_URL=https://<service>.up.railway.app` in `node/.env`.
+
 ## Cost sketch (testnet/staging)
 
 - Vercel: free hobby tier is fine for the frontend.

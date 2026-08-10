@@ -11,6 +11,11 @@ __pycache__/
 venv/
 .env
 *.egg-info/
+*.db
+
+# frontend
+frontend/dist/
+frontend/.vercel/
 
 # node desktop shell
 node_modules/

@@ -2,7 +2,10 @@
 const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || 46630); // Robinhood Chain Testnet
 
 export const config = {
-  coordinatorBase: "/api", // proxied to the FastAPI coordinator in dev
+  // Dev: "/api" is proxied to localhost:8000 (vite.config.js).
+  // Prod: set VITE_COORDINATOR_URL to the deployed coordinator (Railway) URL,
+  // or leave "/api" and add a Vercel rewrite (see vercel.json).
+  coordinatorBase: import.meta.env.VITE_COORDINATOR_URL || "/api",
   chain: {
     chainId: CHAIN_ID,
     chainIdHex: "0x" + CHAIN_ID.toString(16), // 46630 -> 0xb626

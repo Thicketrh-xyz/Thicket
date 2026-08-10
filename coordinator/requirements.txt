@@ -4,4 +4,6 @@ pydantic>=2.6
 web3>=6.15
 eth-account>=0.11
 eth-utils>=4.0
-# add: psycopg[binary], redis, sqlalchemy when moving off in-memory state
+SQLAlchemy>=2.0
+APScheduler>=3.10
+psycopg[binary]>=3.1   # Postgres driver (prod); SQLite needs no driver
