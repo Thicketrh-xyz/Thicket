@@ -83,6 +83,21 @@ def health():
     return {"status": "ok", "dry": chain.dry, "epoch_seconds": EPOCH_SECONDS}
 
 
+@app.get("/stats")
+def stats(db: Session = Depends(get_db)):
+    """Real network stats for the landing page — computed from the DB, no fakes."""
+    nodes = db.query(Node).all()
+    now = time.time()
+    online = sum(1 for n in nodes if n.last_heartbeat and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S)
+    total_earned = sum(n.cumulative_reward + n.contribution_minutes * REWARD_PER_MINUTE for n in nodes)
+    return {
+        "nodes": len(nodes),                                   # operators ever registered
+        "active_nodes": online,                                # heartbeating right now
+        "minutes_contributed": round(total_earned / REWARD_PER_MINUTE, 1),
+        "thkt_earned": round(total_earned, 2),
+    }
+
+
 @app.post("/register")
 def register(req: RegisterReq, db: Session = Depends(get_db)):
     msg = signing.register_message(req.address, req.node_id)

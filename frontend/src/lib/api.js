@@ -22,6 +22,11 @@ export function fetchNode(address) {
   return get(`/node/${address}`);
 }
 
+// Real network-wide stats for the landing page.
+export function fetchStats() {
+  return get("/stats");
+}
+
 // This account's claim (amount + Merkle proof) for the on-chain claim tx.
 export async function fetchClaimFor(address) {
   const claims = await fetchClaims();

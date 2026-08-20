@@ -1,7 +1,8 @@
+import { useEffect, useState } from "react";
 import { CircuitForest } from "./Logo";
-import { DEMO } from "../config";
+import { fetchStats } from "../lib/api";
 
-const fmt = (n) => n.toLocaleString("en-US");
+const fmt = (n) => (n == null ? "—" : Math.round(Number(n)).toLocaleString("en-US"));
 
 export function Hero({ onRunNode }) {
   return (
@@ -28,20 +29,29 @@ export function Hero({ onRunNode }) {
 }
 
 export function Stats() {
+  const [s, setS] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => { const d = await fetchStats(); if (alive && d) setS(d); };
+    load();
+    const id = setInterval(load, 10000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
   return (
     <div className="container">
       <div className="stats">
         <div className="stat">
-          <div className="val">{fmt(DEMO.networkTflops)}</div>
-          <div className="lbl">TFLOPS contributed</div>
-        </div>
-        <div className="stat">
-          <div className="val">{fmt(DEMO.activeNodes)}</div>
+          <div className="val">{fmt(s?.active_nodes)}</div>
           <div className="lbl">Active nodes</div>
         </div>
         <div className="stat">
-          <div className="val">{fmt(DEMO.tasksExecuted)}</div>
-          <div className="lbl">Tasks executed</div>
+          <div className="val">{fmt(s?.minutes_contributed)}</div>
+          <div className="lbl">Minutes contributed</div>
+        </div>
+        <div className="stat">
+          <div className="val">{fmt(s?.thkt_earned)}</div>
+          <div className="lbl">THKT earned</div>
         </div>
       </div>
     </div>
