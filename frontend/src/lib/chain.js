@@ -50,6 +50,15 @@ export async function getTokenBalance(signer, address) {
   return t.balanceOf(address);
 }
 
+// On-chain rewards state: THKT wallet balance + total claimed-to-date.
+export async function getRewardsInfo(signer, address) {
+  const d = contract(config.contracts.distributor, DISTRIBUTOR_ABI, signer);
+  const t = contract(config.contracts.token, TOKEN_ABI, signer);
+  if (!d || !t) return null;
+  const [claimed, balance] = await Promise.all([d.claimed(address), t.balanceOf(address)]);
+  return { claimed, balance }; // both bigint (wei)
+}
+
 // One read for everything the Stake panel needs: THKT balance, the min bond,
 // current operator status, and how much THKT is already approved.
 export async function getStakingInfo(signer, address) {
