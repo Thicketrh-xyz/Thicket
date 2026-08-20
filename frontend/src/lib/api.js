@@ -17,6 +17,11 @@ export function fetchClaims() {
   return get("/claims");
 }
 
+// Live status + earnings for one operator (dashboard polls this).
+export function fetchNode(address) {
+  return get(`/node/${address}`);
+}
+
 // This account's claim (amount + Merkle proof) for the on-chain claim tx.
 export async function fetchClaimFor(address) {
   const claims = await fetchClaims();

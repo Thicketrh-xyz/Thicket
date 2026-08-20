@@ -18,12 +18,13 @@ import time
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from . import signing
 from .challenge import make_challenge, verify as verify_challenge
 from .db import Node, SessionLocal, init_db
-from .epoch import EPOCH_SECONDS, chain_bridge, close_epoch, current_claims, start_scheduler
+from .epoch import EPOCH_SECONDS, REWARD_PER_MINUTE, chain_bridge, close_epoch, current_claims, start_scheduler
 
 app = FastAPI(title="Thicket Coordinator", version="0.3.0")
 
@@ -156,3 +157,39 @@ def epoch_close():
 @app.get("/claims")
 def claims():
     return current_claims()
+
+
+@app.get("/node/{address}")
+def node_status(address: str, db: Session = Depends(get_db)):
+    """Live status + earnings for one operator, for the dashboard to poll.
+
+    earned = settled (claimable, in the last on-chain root) + pending (accrued
+    this epoch, not yet claimable). `claim` carries the Merkle proof for the
+    settled amount so the UI can claim in one tx.
+    """
+    node = db.query(Node).filter(func.lower(Node.address) == address.lower()).first()
+    if not node:
+        return {"registered": False}
+    now = time.time()
+    online = bool(node.last_heartbeat) and (now - node.last_heartbeat) <= HEARTBEAT_TIMEOUT_S
+    pending = node.contribution_minutes * REWARD_PER_MINUTE
+
+    claim = None
+    for k, v in current_claims().items():
+        if k.lower() == node.address.lower():
+            claim = v
+            break
+
+    return {
+        "registered": True,
+        "online": online,
+        "address": node.address,
+        "node_id": node.node_id,
+        "reward_per_minute": REWARD_PER_MINUTE,
+        "contribution_minutes": round(node.contribution_minutes, 4),
+        "pending_thkt": pending,                 # accrued this epoch, not yet claimable
+        "settled_thkt": node.cumulative_reward,  # claimable (in the last root)
+        "earned_thkt": node.cumulative_reward + pending,
+        "last_heartbeat": node.last_heartbeat,
+        "claim": claim,                          # {cumulativeAmount, proof} | None
+    }

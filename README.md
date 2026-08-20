@@ -17,6 +17,23 @@ Lime-green circuit-tree on white (see the logo). Design tokens live in
 [`brand/theme.css`](brand/theme.css) — import them everywhere UI is rendered. Primary is
 `--thicket-lime: #a3ce3a`.
 
+## Run a node
+
+Live on Robinhood Chain testnet. You need a wallet with **≥1,000 THKT** (the operator bond)
+plus a little testnet ETH for gas.
+
+```bash
+git clone https://github.com/Thicketrh-xyz/Thicket.git
+cd Thicket/node
+cp .env.example .env            # set THICKET_PRIVATE_KEY=0x...  (coordinator URL + addresses are prefilled)
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -u -m thicket_node.client
+```
+
+The node bonds itself on-chain, registers with the coordinator, and starts earning THKT per
+verified minute. Watch it live on the dashboard at **thicket-eta.vercel.app**. (Already bonded
+from the web app's Stake tab? Set `SKIP_BOND=true` in `.env`.)
+
 ## How it works — the hybrid loop
 
 ```

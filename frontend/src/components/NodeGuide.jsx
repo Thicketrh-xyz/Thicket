@@ -1,8 +1,5 @@
-import { CONTRACTS_LIVE } from "../config";
-
-// Honest "how to actually run a node" guide. Running a node is NOT a webapp
-// action — it's a program you run on your machine. This modal shows the real
-// commands instead of pretending a button does it.
+// How to actually run a node against the live Thicket network. Running a node
+// is a program on your machine, not a webapp action — these are the real steps.
 export function NodeGuide({ open, onClose }) {
   if (!open) return null;
   return (
@@ -14,53 +11,48 @@ export function NodeGuide({ open, onClose }) {
         </div>
         <div className="modal-body">
           <p style={{ marginTop: 0, color: "var(--text-muted)" }}>
-            A node is a small program you run on a machine with a GPU. It shares your
-            compute, passes verification challenges, and earns THKT. This website is the
-            portal — it can't run the node for you.
+            A node is a small program you run on a machine with a GPU. It bonds THKT, passes
+            verification challenges, and earns THKT per minute online. The network is live on
+            Robinhood Chain testnet.
           </p>
 
-          {!CONTRACTS_LIVE && (
-            <div className="modal-step">
-              <div className="num">1</div>
-              <div>
-                <h4>Deploy the contracts to testnet</h4>
-                <p>Not done yet — the network isn't live. Deploy with a funded key (see DEPLOY.md), then wire the addresses:</p>
-                <div className="code">{`cd contracts
-export PRIVATE_KEY=0xYOUR_FUNDED_TESTNET_KEY
-forge script script/Deploy.s.sol \\
-  --rpc-url https://rpc.testnet.chain.robinhood.com/rpc --broadcast
-cd .. && ./scripts/write-env.sh`}</div>
-              </div>
-            </div>
-          )}
-
           <div className="modal-step">
-            <div className="num">{CONTRACTS_LIVE ? "1" : "2"}</div>
+            <div className="num">1</div>
             <div>
-              <h4>Start the coordinator</h4>
-              <p>The backend that tracks heartbeats, issues challenges, and settles rewards.</p>
-              <div className="code">{`cd coordinator
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn app.main:app --port 8000`}</div>
+              <h4>Get a funded wallet</h4>
+              <p>You need a wallet with at least <b>1,000 THKT</b> (the operator bond) plus a little
+                testnet ETH for gas. Testnet ETH is free from the Robinhood faucet; THKT is
+                distributed by the team for now.</p>
             </div>
           </div>
 
           <div className="modal-step">
-            <div className="num">{CONTRACTS_LIVE ? "2" : "3"}</div>
+            <div className="num">2</div>
             <div>
-              <h4>Run the node client</h4>
-              <p>On the machine with the GPU. Set your wallet key in node/.env — the node bonds THKT as an operator, then heartbeats and solves challenges. Earnings show on your dashboard here.</p>
-              <div className="code">{`cd node
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.example .env        # set THICKET_PRIVATE_KEY (fund it with THKT + gas)
+              <h4>Get the code &amp; configure</h4>
+              <p>Clone the repo and set your wallet key. The coordinator URL and contract
+                addresses are already filled in.</p>
+              <div className="code">{`git clone https://github.com/Thicketrh-xyz/Thicket.git
+cd Thicket/node
+cp .env.example .env
+#  → open .env and set THICKET_PRIVATE_KEY=0x...`}</div>
+            </div>
+          </div>
+
+          <div className="modal-step">
+            <div className="num">3</div>
+            <div>
+              <h4>Run it</h4>
+              <p>The node bonds itself on-chain, registers, and starts earning. Watch your
+                earnings tick up on this dashboard.</p>
+              <div className="code">{`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -u -m thicket_node.client`}</div>
             </div>
           </div>
 
           <div className="modal-note">
-            The node client currently runs a placeholder compute challenge — swapping in a
-            real GPU model runtime is on the roadmap (Sapling). Bonding THKT requires the
-            contracts to be deployed and your wallet funded on testnet.
+            Already bonded from the Stake tab? Set <code>SKIP_BOND=true</code> in <code>.env</code> and
+            the node skips bonding. Earnings settle to an on-chain root each epoch, then Claim here.
           </div>
         </div>
       </div>
