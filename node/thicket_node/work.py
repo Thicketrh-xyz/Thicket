@@ -21,6 +21,17 @@ def _lcg(seed: int):
         yield state % _PRIME
 
 
+def run_job(prompt: str) -> str:
+    """Execute a paid compute job. Placeholder 'inference' — a deterministic
+    transform standing in for a real model runtime (the GPU model is the Sapling
+    roadmap item; swap it in here without changing the client loop)."""
+    from hashlib import sha256
+    ref = sha256(prompt.encode()).hexdigest()[:10]
+    words = len(prompt.split())
+    return (f"[thicket-node output] processed prompt ({words} words). "
+            f"A real model runs here in production. ref={ref}")
+
+
 def solve_challenge(challenge: dict) -> str:
     n = challenge["size"]
     rng = _lcg(challenge["seed"])

@@ -45,6 +45,22 @@ class Node(Base):
     failed_challenges: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class Job(Base):
+    """A paid compute job: buyer pays THKT (which refills the rewards pool), a
+    node executes it, the buyer collects the result."""
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    prompt: Mapped[str] = mapped_column(String(2000), default="")
+    payer: Mapped[str] = mapped_column(String(42), default="")
+    payment_thkt: Mapped[float] = mapped_column(Float, default=0.0)  # THKT (wei overflows int8)
+    payment_tx: Mapped[str] = mapped_column(String(80), default="")
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|assigned|done
+    assigned_node: Mapped[str | None] = mapped_column(String(42), nullable=True)
+    result: Mapped[str | None] = mapped_column(String(4000), nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, default=0.0)
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
 

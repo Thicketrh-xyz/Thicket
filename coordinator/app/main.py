@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from . import signing
 from .challenge import make_challenge, verify as verify_challenge
-from .db import Node, SessionLocal, init_db
+from .db import Job, Node, SessionLocal, init_db
 from .epoch import EPOCH_SECONDS, REWARD_PER_MINUTE, chain_bridge, close_epoch, current_claims, start_scheduler
 
 app = FastAPI(title="Thicket Coordinator", version="0.3.0")
@@ -42,6 +42,8 @@ CHALLENGE_INTERVAL_S = int(os.getenv("CHALLENGE_INTERVAL_S", "600"))
 CHALLENGE_SIZE = int(os.getenv("CHALLENGE_SIZE", "128"))
 MAX_FAILS_BEFORE_SLASH = int(os.getenv("MAX_FAILS_BEFORE_SLASH", "3"))
 SLASH_AMOUNT_WEI = int(float(os.getenv("SLASH_AMOUNT_THKT", "100")) * 10**18)
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+COMPUTE_PRICE_THKT = float(os.getenv("COMPUTE_PRICE_THKT", "10"))  # price per job
 
 chain = chain_bridge()
 
@@ -136,8 +138,21 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
         node.last_challenge_at = now
         challenge = ch.to_dict()
 
+    # Hand this online node a pending compute job, if any.
+    job_payload = None
+    pending = db.query(Job).filter(Job.status == "pending").order_by(Job.created_at).first()
+    if pending:
+        pending.status = "assigned"
+        pending.assigned_node = req.address
+        job_payload = {"id": pending.id, "prompt": pending.prompt}
+
     db.commit()
-    return {"ok": True, "minutes": round(node.contribution_minutes, 4), "challenge": challenge}
+    return {
+        "ok": True,
+        "minutes": round(node.contribution_minutes, 4),
+        "challenge": challenge,
+        "job": job_payload,
+    }
 
 
 @app.post("/challenge/result")
@@ -172,6 +187,72 @@ def epoch_close():
 @app.get("/claims")
 def claims():
     return current_claims()
+
+
+# --- pay-for-compute: buyers pay THKT (which refills the pool), nodes execute ---
+class JobReq(BaseModel):
+    prompt: str
+    payer: str
+    payment_tx: str = ""       # the fund() tx that paid into the pool
+    payment_thkt: float = 0.0
+
+
+class JobResultReq(BaseModel):
+    address: str
+    result: str
+
+
+@app.get("/compute/price")
+def compute_price():
+    return {"price_thkt": COMPUTE_PRICE_THKT}
+
+
+@app.post("/jobs")
+def submit_job(req: JobReq, db: Session = Depends(get_db)):
+    """Record a paid job. Payment is the on-chain fund() into the rewards pool;
+    for the MVP we trust the client-provided tx (production would verify it on
+    chain). The job is then assigned to the next online node via heartbeat."""
+    if not req.prompt.strip():
+        raise HTTPException(400, "empty prompt")
+    jid = secrets.token_hex(8)
+    db.add(Job(
+        id=jid, prompt=req.prompt[:2000], payer=req.payer,
+        payment_thkt=req.payment_thkt, payment_tx=req.payment_tx,
+        status="pending", created_at=time.time(),
+    ))
+    db.commit()
+    return {"id": jid, "status": "pending"}
+
+
+@app.get("/jobs/{jid}")
+def get_job(jid: str, db: Session = Depends(get_db)):
+    job = db.get(Job, jid)
+    if not job:
+        raise HTTPException(404, "no such job")
+    return {"id": job.id, "status": job.status, "prompt": job.prompt,
+            "result": job.result, "node": job.assigned_node}
+
+
+@app.post("/jobs/{jid}/result")
+def job_result(jid: str, req: JobResultReq, db: Session = Depends(get_db)):
+    job = db.get(Job, jid)
+    if not job or job.assigned_node != req.address:
+        raise HTTPException(400, "not your job")
+    job.result = (req.result or "")[:4000]
+    job.status = "done"
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/admin/reset")
+def admin_reset(token: str = "", db: Session = Depends(get_db)):
+    """Wipe node + job state (fresh stats). Guarded by ADMIN_TOKEN."""
+    if not ADMIN_TOKEN or token != ADMIN_TOKEN:
+        raise HTTPException(403, "forbidden")
+    n = db.query(Node).delete()
+    j = db.query(Job).delete()
+    db.commit()
+    return {"ok": True, "nodes_cleared": n, "jobs_cleared": j}
 
 
 @app.get("/node/{address}")

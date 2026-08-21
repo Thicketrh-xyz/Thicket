@@ -6,6 +6,7 @@ import { Dashboard } from "./components/Dashboard";
 import { StakePanel } from "./components/StakePanel";
 import { HowItWorks } from "./components/HowItWorks";
 import { Roadmap } from "./components/Roadmap";
+import { ComputePanel } from "./components/ComputePanel";
 import { Participate } from "./components/Participate";
 import { Footer } from "./components/Footer";
 import { NodeGuide } from "./components/NodeGuide";
@@ -57,6 +58,7 @@ export default function App() {
       <HowItWorks />
       <Capabilities />
       <Roadmap />
+      <ComputePanel session={session} notify={notify} />
       <Dashboard session={session} notify={notify} />
       <StakePanel session={session} notify={notify} />
       <Participate onRunNode={openGuide} />

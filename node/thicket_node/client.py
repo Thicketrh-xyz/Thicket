@@ -20,7 +20,7 @@ from eth_account.messages import encode_defunct
 
 from .bond import ensure_bonded
 from .config import config
-from .work import solve_challenge
+from .work import run_job, solve_challenge
 
 
 class ThicketNode:
@@ -64,6 +64,15 @@ class ThicketNode:
         print(f"[thicket] online — {data['minutes']:.2f} contribution minutes")
         if data.get("challenge"):
             self._handle_challenge(data["challenge"])
+        if data.get("job"):
+            self._handle_job(data["job"])
+
+    def _handle_job(self, job: dict) -> None:
+        print(f"[thicket] compute job {job['id']} — running")
+        result = run_job(job["prompt"])
+        requests.post(f"{self.coordinator}/jobs/{job['id']}/result",
+                      json={"address": self.address, "result": result}, timeout=120)
+        print(f"[thicket] job {job['id']} done")
 
     def _handle_challenge(self, challenge: dict) -> None:
         print(f"[thicket] challenge {challenge['id']} — solving {challenge['type']}")

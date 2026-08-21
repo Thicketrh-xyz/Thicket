@@ -112,6 +112,29 @@ export async function registerOperator(signer, nodeId, amountThkt, onStatus = ()
   return receipt.hash;
 }
 
+// Pay THKT for a compute job — the payment funds the rewards pool via fund().
+export async function payForCompute(signer, amountThkt, onStatus = () => {}) {
+  const amount = parseUnits(String(amountThkt), 18);
+  const token = contract(config.contracts.token, TOKEN_ABI, signer);
+  const dist = contract(config.contracts.distributor, DISTRIBUTOR_ABI, signer);
+  if (!token || !dist) throw new Error("Contracts not configured");
+  const owner = await signer.getAddress();
+  const allowance = await token.allowance(owner, config.contracts.distributor);
+  if (allowance < amount) {
+    onStatus("Approving THKT…");
+    await (await token.approve(config.contracts.distributor, amount)).wait();
+  }
+  onStatus("Paying into the pool…");
+  const receipt = await (await dist.fund(amount)).wait();
+  return receipt.hash;
+}
+
+export async function getPoolBalance(signer) {
+  const dist = contract(config.contracts.distributor, DISTRIBUTOR_ABI, signer);
+  if (!dist) return null;
+  return dist.poolBalance();
+}
+
 // Delegate THKT to an operator (approve -> delegate).
 export async function delegate(signer, operator, amountThkt, onStatus = () => {}) {
   const amount = parseUnits(String(amountThkt), 18);

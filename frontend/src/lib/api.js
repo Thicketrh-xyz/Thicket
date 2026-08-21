@@ -27,6 +27,29 @@ export function fetchStats() {
   return get("/stats");
 }
 
+// --- pay-for-compute ---
+export function fetchComputePrice() {
+  return get("/compute/price");
+}
+
+export async function submitJob(prompt, payer, paymentTx, paymentThkt) {
+  try {
+    const r = await fetch(`${config.coordinatorBase}/jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, payer, payment_tx: paymentTx, payment_thkt: paymentThkt }),
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+export function fetchJob(id) {
+  return get(`/jobs/${id}`);
+}
+
 // This account's claim (amount + Merkle proof) for the on-chain claim tx.
 export async function fetchClaimFor(address) {
   const claims = await fetchClaims();

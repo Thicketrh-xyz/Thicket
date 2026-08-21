@@ -15,4 +15,6 @@ export const STAKING_ABI = [
 export const DISTRIBUTOR_ABI = [
   "function claim(address account, uint256 cumulativeAmount, bytes32[] proof)",
   "function claimed(address) view returns (uint256)",
+  "function fund(uint256 amount)",
+  "function poolBalance() view returns (uint256)",
 ];

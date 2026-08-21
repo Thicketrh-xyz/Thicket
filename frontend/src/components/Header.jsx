@@ -11,7 +11,7 @@ export function Header({ address, onConnect, onToggleTheme }) {
         </div>
         <nav className="nav">
           <a href="#how">How it works</a>
-          <a href="#roadmap">Roadmap</a>
+          <a href="#compute">Compute</a>
           <a href="#dashboard">Dashboard</a>
           <a href="#stake">Stake</a>
           <button className="btn ghost sm" onClick={onToggleTheme} title="Toggle theme">◐</button>
