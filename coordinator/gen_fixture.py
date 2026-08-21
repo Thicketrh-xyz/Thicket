@@ -31,7 +31,7 @@ pragma solidity ^0.8.24;
 
 import {{Test}} from "forge-std/Test.sol";
 import {{ThicketToken}} from "../src/ThicketToken.sol";
-import {{RewardsDistributor, IThicketToken}} from "../src/RewardsDistributor.sol";
+import {{RewardsDistributor}} from "../src/RewardsDistributor.sol";
 
 /// Proves the Python Merkle tree (coordinator) and Solidity claim verifier agree.
 contract MerkleInteropTest is Test {{
@@ -41,10 +41,10 @@ contract MerkleInteropTest is Test {{
 
     function setUp() public {{
         vm.startPrank(owner);
-        token = new ThicketToken(0, 100_000_000e18, owner);
-        dist = new RewardsDistributor(IThicketToken(address(token)), owner);
-        token.setMinter(address(dist));
+        token = new ThicketToken(1_000_000_000 ether, owner);
+        dist = new RewardsDistributor(token, owner);
         dist.setPublisher(owner);
+        token.transfer(address(dist), 1_000_000 ether); // fund the pool
         dist.publishRoot({tree.root_hex()});
         vm.stopPrank();
     }}
