@@ -3,12 +3,19 @@
   "chainId": 46630,
   "rpc": "https://rpc.testnet.chain.robinhood.com/rpc",
   "explorer": "https://explorer.testnet.chain.robinhood.com",
+  "model": "fixed-supply pool (no minting; rewards paid from a pre-funded pool)",
   "contracts": {
-    "ThicketToken": "0xac2763ede29a967b490293f5276ac8042acb35c1",
-    "NodeStaking": "0x002497526d249f31f0ba5cb30627228c3b9b4e39",
-    "RewardsDistributor": "0xfe03bc178cff2149e84b4babb399083e31c637e2"
+    "ThicketToken": "0x4D4837ddb309a8dCeC3Abe727dbfED584771aEE2",
+    "NodeStaking": "0x434A64884B7C373eE145f11Ac9b7393723Ee5059",
+    "RewardsDistributor": "0xD5afab6f1d786be0fad6281b9c842D0662Fa88e5"
   },
-  "owner": "0x14aA5E299c0D9d0F3Eb98442eAB6A0FDBDec779C",
-  "coordinator_publisher_slasher": "0x14aA5E299c0D9d0F3Eb98442eAB6A0FDBDec779C",
-  "token": { "name": "Thicket", "symbol": "THKT", "initialSupply": "10000000", "minOperatorStake": "1000" }
+  "treasury": "0x249d3652A487a116cFa39B7B0D1a2f1A020Ec860",
+  "coordinator_publisher_slasher": "0x249d3652A487a116cFa39B7B0D1a2f1A020Ec860",
+  "token": {
+    "name": "Thicket",
+    "symbol": "THKT",
+    "totalSupply": "1000000000",
+    "rewardsPool": "350000000",
+    "minOperatorStake": "1000"
+  }
 }
