@@ -46,12 +46,12 @@ export function Stats() {
           <div className="lbl">Active nodes</div>
         </div>
         <div className="stat">
-          <div className="val">{fmt(s?.minutes_contributed)}</div>
-          <div className="lbl">Minutes contributed</div>
+          <div className="val">{fmt(s?.pool_thkt)}</div>
+          <div className="lbl">THKT in rewards pool</div>
         </div>
         <div className="stat">
           <div className="val">{fmt(s?.thkt_earned)}</div>
-          <div className="lbl">THKT earned</div>
+          <div className="lbl">THKT earned by nodes</div>
         </div>
       </div>
     </div>

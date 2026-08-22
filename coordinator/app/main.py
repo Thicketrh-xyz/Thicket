@@ -97,6 +97,7 @@ def stats(db: Session = Depends(get_db)):
         "active_nodes": online,                                # heartbeating right now
         "minutes_contributed": round(total_earned / REWARD_PER_MINUTE, 1),
         "thkt_earned": round(total_earned, 2),
+        "pool_thkt": round(chain.pool_balance(), 2),           # rewards pool balance (on-chain)
     }
 
 
@@ -214,6 +215,18 @@ def submit_job(req: JobReq, db: Session = Depends(get_db)):
     chain). The job is then assigned to the next online node via heartbeat."""
     if not req.prompt.strip():
         raise HTTPException(400, "empty prompt")
+
+    # No reusing one payment for multiple jobs.
+    if req.payment_tx and db.query(Job).filter(Job.payment_tx == req.payment_tx).first():
+        raise HTTPException(400, "payment already used")
+
+    # Verify the payment actually funded the pool (skipped only in DRY mode).
+    if not chain.dry:
+        if req.payment_thkt < COMPUTE_PRICE_THKT:
+            raise HTTPException(402, f"payment below price ({COMPUTE_PRICE_THKT} THKT)")
+        if not req.payment_tx or not chain.verify_payment(req.payment_tx, req.payer, COMPUTE_PRICE_THKT):
+            raise HTTPException(402, "payment not verified on-chain")
+
     jid = secrets.token_hex(8)
     db.add(Job(
         id=jid, prompt=req.prompt[:2000], payer=req.payer,

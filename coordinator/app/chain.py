@@ -20,9 +20,11 @@ import os
 
 try:
     from web3 import Web3
+    from web3.logs import DISCARD
     _WEB3 = True
 except ImportError:  # keeps the coordinator importable without web3 installed
     _WEB3 = False
+    DISCARD = None
 
 _STAKING_ABI = [
     {"name": "operators", "type": "function", "stateMutability": "view",
@@ -39,6 +41,11 @@ _STAKING_ABI = [
 _DISTRIBUTOR_ABI = [
     {"name": "publishRoot", "type": "function", "stateMutability": "nonpayable",
      "inputs": [{"name": "root", "type": "bytes32"}], "outputs": []},
+    {"name": "poolBalance", "type": "function", "stateMutability": "view",
+     "inputs": [], "outputs": [{"name": "", "type": "uint256"}]},
+    {"name": "PoolFunded", "type": "event", "anonymous": False,
+     "inputs": [{"name": "from", "type": "address", "indexed": True},
+                {"name": "amount", "type": "uint256", "indexed": False}]},
 ]
 
 
@@ -66,6 +73,33 @@ class ChainBridge:
         registered, self_stake, _, _ = self.staking.functions.operators(
             Web3.to_checksum_address(address)).call()
         return registered and self_stake > 0
+
+    def pool_balance(self) -> float:
+        """THKT currently in the rewards pool (0.0 in DRY mode)."""
+        if self.dry:
+            return 0.0
+        try:
+            return self.distributor.functions.poolBalance().call() / 1e18
+        except Exception:  # noqa: BLE001
+            return 0.0
+
+    def verify_payment(self, tx_hash: str, payer: str, min_thkt: float) -> bool:
+        """Confirm tx_hash is a successful fund() that paid >= min_thkt into the
+        pool from `payer` (a PoolFunded event). Trusts the client in DRY mode."""
+        if self.dry:
+            return True
+        try:
+            receipt = self.w3.eth.get_transaction_receipt(tx_hash)
+            if not receipt or receipt.status != 1:
+                return False
+            min_wei = int(min_thkt * 1e18)
+            events = self.distributor.events.PoolFunded().process_receipt(receipt, errors=DISCARD)
+            for ev in events:
+                if ev["args"]["from"].lower() == payer.lower() and ev["args"]["amount"] >= min_wei:
+                    return True
+            return False
+        except Exception:  # noqa: BLE001 — any RPC/parse failure => not verified
+            return False
 
     # --- writes ---
     def publish_root(self, root_hex: str):
