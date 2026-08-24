@@ -146,7 +146,6 @@ export function NetworkHero() {
       <canvas ref={canvasRef} className="hero-net-canvas" aria-hidden="true" />
       <CircuitForest />
       <div className="container hero-net-inner">
-        <span className="pill"><span className="live" /> Live on Robinhood Chain testnet</span>
         <h1>Grow the network.<br /><span className="accent">Earn from your GPU.</span></h1>
         <p className="lead">
           Thousands of edge GPUs, one network. Run a node, contribute AI compute,
