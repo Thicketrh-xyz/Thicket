@@ -4,6 +4,7 @@ import { ComputePanel } from "./components/ComputePanel";
 import { Dashboard } from "./components/Dashboard";
 import { StakePanel } from "./components/StakePanel";
 import { NodeGuide } from "./components/NodeGuide";
+import { PortalStats } from "./components/PortalStats";
 import { connect, hasWallet } from "./lib/chain";
 import { CONTRACTS_LIVE } from "./config";
 
@@ -55,6 +56,7 @@ export default function Portal() {
         </div>
       </section>
 
+      <PortalStats />
       <ComputePanel session={session} notify={notify} />
       <Dashboard session={session} notify={notify} />
       <StakePanel session={session} notify={notify} />
