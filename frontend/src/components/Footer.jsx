@@ -40,12 +40,16 @@ export function Footer() {
               <a className="social" href={GITHUB} target="_blank" rel="noreferrer" title="GitHub" aria-label="GitHub"><GitHubIcon /></a>
               <span className="social soon" title="Telegram — coming soon" aria-label="Telegram (coming soon)"><TelegramIcon /></span>
             </div>
-            <p className="muted" style={{ margin: "12px 0 0", fontSize: "0.82rem" }}>Telegram coming soon</p>
+            <p style={{ margin: "12px 0 0", fontSize: "0.82rem", opacity: 0.75 }}>Telegram coming soon</p>
           </div>
         </div>
-        <div className="footer-bottom row">
+        <div className="footer-bottom">
           <span>🌿 Thicket — decentralized GPU network on Robinhood Chain</span>
-          <span><a href={SUPPORT}>Contact support</a> · Testnet · not audited</span>
+          <span>
+            <a href={SUPPORT}>Contact support</a>
+            <span style={{ margin: "0 10px", opacity: 0.5 }}>·</span>
+            Testnet · not audited
+          </span>
         </div>
       </div>
     </footer>

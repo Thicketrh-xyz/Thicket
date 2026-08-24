@@ -249,16 +249,23 @@ a:hover { text-decoration: underline; }
 .footer-cols h4 { color: var(--text); font-size: 0.9rem; margin: 0 0 12px; }
 .footer-cols a { display: block; color: var(--text-muted); font-weight: 500; margin-bottom: 9px; }
 .footer-cols a:hover { color: var(--accent-ink); text-decoration: none; }
-.footer-bottom { border-top: 1px solid var(--border); padding-top: 20px; }
+.footer-bottom { border-top: 1px solid var(--border); padding-top: 20px; width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .footer-bottom a { color: var(--accent-ink); font-weight: 600; }
-.socials { display: flex; gap: 10px; }
-.social { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
-  border-radius: 11px; border: 1px solid var(--border); color: var(--text-muted); background: var(--bg-elevated);
-  transition: color 0.15s, border-color 0.15s, background 0.15s; }
-.social:hover { color: var(--accent-ink); border-color: var(--accent); text-decoration: none;
-  background: color-mix(in srgb, var(--accent) 10%, transparent); }
-.social.soon { opacity: 0.45; cursor: default; }
-.social.soon:hover { color: var(--text-muted); border-color: var(--border); background: var(--bg-elevated); }
+.footer-bottom a:hover { text-decoration: underline; }
+@media (max-width: 620px) { .footer-bottom { flex-direction: column; align-items: flex-start; gap: 8px; } }
+.socials { display: flex; gap: 10px; align-items: center; }
+/* override .footer-cols a { display:block } so buttons stay square */
+.footer-cols .socials a.social, .socials .social {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; flex: 0 0 40px; margin: 0; padding: 0;
+  border-radius: 12px; border: 1px solid var(--border);
+  color: var(--text-muted); background: var(--bg-elevated);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.footer-cols .socials a.social:hover { color: var(--accent-ink); border-color: var(--accent);
+  text-decoration: none; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.social.soon { opacity: 0.4; cursor: default; }
 /* living-network hero (white, glowing lime core) */
 .hero-net { position: relative; min-height: 94vh; overflow: hidden;
   background: linear-gradient(180deg, #ffffff 0%, var(--thicket-mist) 100%); }
