@@ -145,7 +145,7 @@ export function NetworkHero() {
     <section className="hero-net">
       <canvas ref={canvasRef} className="hero-net-canvas" aria-hidden="true" />
       <CircuitForest />
-      <div className="hero-net-inner">
+      <div className="container"><div className="hero-net-inner">
         <h1>Grow the network.<br /><span className="accent">Earn from your GPU.</span></h1>
         <p className="lead">
           Thousands of edge GPUs, one network. Run a node, contribute AI compute,
@@ -155,7 +155,7 @@ export function NetworkHero() {
           <a className="btn" href="/app">Launch app →</a>
           <a className="btn ghost" href="/docs">Read the docs</a>
         </div>
-      </div>
+      </div></div>
     </section>
   );
 }
