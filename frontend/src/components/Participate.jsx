@@ -1,4 +1,4 @@
-export function Participate({ onRunNode }) {
+export function Participate() {
   return (
     <section className="section mist" id="participate">
       <div className="container">
@@ -8,17 +8,17 @@ export function Participate({ onRunNode }) {
           <div className="cta-card">
             <h3>Run a node</h3>
             <p>Share a spare GPU, pass challenges, and earn THKT for every verified minute you're online.</p>
-            <button className="btn" onClick={onRunNode}>Run a node</button>
+            <a className="btn" href="/docs#run-a-node">Run a node</a>
           </div>
           <div className="cta-card">
             <h3>Delegate &amp; earn</h3>
             <p>No hardware? Stake THKT to an operator and share the rewards their node produces.</p>
-            <a className="btn ghost" href="#stake">Stake now</a>
+            <a className="btn ghost" href="/app">Open the app</a>
           </div>
           <div className="cta-card">
             <h3>Build on Thicket</h3>
-            <p>Send inference and fine-tuning jobs to the network through a simple API. Docs coming with mainnet.</p>
-            <a className="btn ghost" href="#how">See how it works</a>
+            <p>Send inference and fine-tuning jobs to the network through a simple API.</p>
+            <a className="btn ghost" href="/docs#api">Read the API docs</a>
           </div>
         </div>
       </div>

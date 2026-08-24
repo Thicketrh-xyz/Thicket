@@ -246,6 +246,32 @@ a:hover { text-decoration: underline; }
 .footer-cols a { display: block; color: var(--text-muted); font-weight: 500; margin-bottom: 9px; }
 .footer-cols a:hover { color: var(--accent-ink); text-decoration: none; }
 .footer-bottom { border-top: 1px solid var(--border); padding-top: 20px; }
+/* living-network hero (dark, glowing) */
+.hero-net { position: relative; min-height: 92vh; overflow: hidden;
+  background: radial-gradient(1100px 620px at 68% 46%, #17240d 0%, #0b1207 55%, #080d05 100%); }
+.hero-net-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hero-net-inner { position: relative; z-index: 2; padding: 128px 0 90px; max-width: 640px; }
+.hero-net .pill { color: var(--thicket-lime-bright); background: rgba(183,214,55,0.12);
+  border: 1px solid rgba(183,214,55,0.34); }
+.hero-net h1 { font-size: 4.3rem; line-height: 0.98; letter-spacing: -0.04em; margin: 20px 0;
+  color: #f3f7e9; font-weight: 800; text-shadow: 0 2px 40px rgba(0,0,0,0.4); }
+.hero-net h1 .accent { color: var(--thicket-lime-bright); }
+.hero-net .lead { font-size: 1.22rem; color: #c2cdae; margin: 0 0 32px; max-width: 34ch; }
+.hero-net .hero-cta { display: flex; gap: 14px; flex-wrap: wrap; }
+.hero-net .btn.ghost { color: #f3f7e9; border-color: rgba(255,255,255,0.22); background: transparent; box-shadow: none; }
+.hero-net .btn.ghost:hover { border-color: var(--thicket-lime); background: rgba(183,214,55,0.1); }
+@media (max-width: 760px) {
+  .hero-net { min-height: 86vh; }
+  .hero-net-inner { padding: 92px 0 60px; }
+  .hero-net h1 { font-size: 2.9rem; }
+}
+
+/* portal intro strip */
+.portal-intro { padding: 40px 0 6px; }
+.portal-intro .row { align-items: flex-end; }
+.portal-intro h1 { font-size: 2rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+.portal-intro .sub { color: var(--text-muted); margin: 0; }
+
 /* demo-mode banner */
 .demo-banner { background: color-mix(in srgb, var(--warn) 16%, var(--bg)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, var(--bg));
   color: var(--text); font-size: 0.88rem; text-align: center; padding: 9px 16px; }

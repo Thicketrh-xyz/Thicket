@@ -45,6 +45,13 @@ class Node(Base):
     failed_challenges: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class Counter(Base):
+    """Simple named counters (e.g. cumulative tasks executed)."""
+    __tablename__ = "counters"
+    name: Mapped[str] = mapped_column(String(40), primary_key=True)
+    value: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
 class Job(Base):
     """A paid compute job: buyer pays THKT (which refills the rewards pool), a
     node executes it, the buyer collects the result."""

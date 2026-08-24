@@ -1,33 +1,9 @@
 import { useEffect, useState } from "react";
-import { CircuitForest } from "./Logo";
 import { fetchStats } from "../lib/api";
 
 const fmt = (n) => (n == null ? "—" : Math.round(Number(n)).toLocaleString("en-US"));
 
-export function Hero({ onRunNode }) {
-  return (
-    <section className="hero">
-      <div className="container">
-        <div className="hero-inner">
-          <h1>
-            Grow the network.<br />
-            <span className="accent">Earn from your GPU.</span>
-          </h1>
-          <p className="lead">
-            Run a Thicket node, contribute AI compute, and earn THKT for every
-            verified minute you're online.
-          </p>
-          <div className="hero-cta">
-            <button className="btn" onClick={onRunNode}>Run a node</button>
-            <a className="btn ghost" href="#how">How it works</a>
-          </div>
-        </div>
-      </div>
-      <CircuitForest />
-    </section>
-  );
-}
-
+// Live network stats strip — real figures from the coordinator.
 export function Stats() {
   const [s, setS] = useState(null);
   useEffect(() => {
@@ -46,8 +22,8 @@ export function Stats() {
           <div className="lbl">Active nodes</div>
         </div>
         <div className="stat">
-          <div className="val">{fmt(s?.pool_thkt)}</div>
-          <div className="lbl">THKT in rewards pool</div>
+          <div className="val">{fmt(s?.tasks_executed)}</div>
+          <div className="lbl">Tasks executed</div>
         </div>
         <div className="stat">
           <div className="val">{fmt(s?.thkt_earned)}</div>

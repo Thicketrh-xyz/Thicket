@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from . import signing
 from .challenge import make_challenge, verify as verify_challenge
-from .db import Job, Node, SessionLocal, init_db
+from .db import Counter, Job, Node, SessionLocal, init_db
 from .epoch import EPOCH_SECONDS, REWARD_PER_MINUTE, chain_bridge, close_epoch, current_claims, start_scheduler
 
 app = FastAPI(title="Thicket Coordinator", version="0.3.0")
@@ -62,6 +62,15 @@ def get_db():
         db.close()
 
 
+def bump_tasks(db: Session, n: int = 1) -> None:
+    """Increment the cumulative 'tasks executed' counter (challenges + jobs)."""
+    c = db.get(Counter, "tasks")
+    if not c:
+        c = Counter(name="tasks", value=0)
+        db.add(c)
+    c.value += n
+
+
 class RegisterReq(BaseModel):
     address: str
     node_id: str
@@ -92,9 +101,13 @@ def stats(db: Session = Depends(get_db)):
     now = time.time()
     online = sum(1 for n in nodes if n.last_heartbeat and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S)
     total_earned = sum(n.cumulative_reward + n.contribution_minutes * REWARD_PER_MINUTE for n in nodes)
+    tasks = db.get(Counter, "tasks")
+    jobs_running = db.query(Job).filter(Job.status.in_(("pending", "assigned"))).count()
     return {
         "nodes": len(nodes),                                   # operators ever registered
         "active_nodes": online,                                # heartbeating right now
+        "tasks_executed": tasks.value if tasks else 0,         # cumulative challenges + jobs
+        "jobs_running": jobs_running,                          # compute jobs in flight
         "minutes_contributed": round(total_earned / REWARD_PER_MINUTE, 1),
         "thkt_earned": round(total_earned, 2),
         "pool_thkt": round(chain.pool_balance(), 2),           # rewards pool balance (on-chain)
@@ -175,6 +188,7 @@ def challenge_result(req: ChallengeResultReq, db: Session = Depends(get_db)):
 
     node.pending_challenge_id = None
     node.failed_challenges = 0
+    bump_tasks(db)
     db.commit()
     return {"ok": True}
 
@@ -253,6 +267,7 @@ def job_result(jid: str, req: JobResultReq, db: Session = Depends(get_db)):
         raise HTTPException(400, "not your job")
     job.result = (req.result or "")[:4000]
     job.status = "done"
+    bump_tasks(db)
     db.commit()
     return {"ok": True}
 

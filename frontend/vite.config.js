@@ -6,7 +6,7 @@ export default defineConfig({
   build: {
     // Multi-page: landing (index.html) + docs (docs.html).
     rollupOptions: {
-      input: { main: "index.html", docs: "docs.html" },
+      input: { main: "index.html", app: "app.html", docs: "docs.html" },
     },
   },
   server: {
