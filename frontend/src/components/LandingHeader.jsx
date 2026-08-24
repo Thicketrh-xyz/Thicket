@@ -3,8 +3,8 @@ import { Logo } from "./Logo";
 // Marketing header — no wallet. The app lives behind "Launch app" (/app).
 export function LandingHeader() {
   return (
-    <header className="header">
-      <div className="container header-inner">
+    <header className="header header-land">
+      <div className="header-inner">
         <a className="brand" href="/" style={{ textDecoration: "none" }}>
           <Logo size={28} /> <span className="name">Thicket</span>
         </a>
