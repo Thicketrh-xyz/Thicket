@@ -44,12 +44,7 @@ export function Footer() {
           </div>
         </div>
         <div className="footer-bottom">
-          <span>🌿 Thicket — decentralized GPU network on Robinhood Chain</span>
-          <span>
-            <a href={SUPPORT}>Contact support</a>
-            <span style={{ margin: "0 10px", opacity: 0.5 }}>·</span>
-            Testnet · not audited
-          </span>
+          <a href={SUPPORT}>Contact support</a>
         </div>
       </div>
     </footer>
