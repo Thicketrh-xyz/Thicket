@@ -31,7 +31,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ```
 
 The node bonds itself on-chain, registers with the coordinator, and starts earning THKT per
-verified minute. Watch it live on the dashboard at **thicket-eta.vercel.app**. (Already bonded
+verified minute. Watch it live on the dashboard at **thicketrh.xyz**. (Already bonded
 from the web app's Stake tab? Set `SKIP_BOND=true` in `.env`.)
 
 ## How it works — the hybrid loop
