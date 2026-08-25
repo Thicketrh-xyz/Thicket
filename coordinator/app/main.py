@@ -44,6 +44,7 @@ MAX_FAILS_BEFORE_SLASH = int(os.getenv("MAX_FAILS_BEFORE_SLASH", "3"))
 SLASH_AMOUNT_WEI = int(float(os.getenv("SLASH_AMOUNT_THKT", "100")) * 10**18)
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 COMPUTE_PRICE_THKT = float(os.getenv("COMPUTE_PRICE_THKT", "10"))  # price per job
+JOB_ASSIGN_TIMEOUT_S = int(os.getenv("JOB_ASSIGN_TIMEOUT_S", "180"))  # requeue if unfinished
 
 chain = chain_bridge()
 
@@ -156,6 +157,15 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
         node.pending_seed = seed
         node.last_challenge_at = now
         challenge = ch.to_dict()
+
+    # Requeue work orphaned by a node that took a job and never came back.
+    stale_before = now - JOB_ASSIGN_TIMEOUT_S
+    stale = (db.query(Job)
+               .filter(Job.status == "assigned", Job.created_at < stale_before)
+               .all())
+    for j in stale:
+        j.status = "pending"
+        j.assigned_node = None
 
     # Hand this node a pending job it can actually run (capability-matched).
     job_payload = None
@@ -286,6 +296,22 @@ def job_result(jid: str, req: JobResultReq, db: Session = Depends(get_db)):
     bump_tasks(db)
     db.commit()
     return {"ok": True}
+
+
+@app.get("/debug/jobs")
+def debug_jobs(db: Session = Depends(get_db)):
+    """Job metadata only (no prompts) so routing problems are diagnosable."""
+    now = time.time()
+    rows = db.query(Job).order_by(Job.created_at.desc()).limit(20).all()
+    nodes = db.query(Node).all()
+    return {
+        "jobs": [{"id": j.id, "kind": j.kind, "status": j.status,
+                  "node": j.assigned_node, "has_result": bool(j.result),
+                  "age_s": round(now - (j.created_at or now))} for j in rows],
+        "nodes": [{"address": n.address, "capabilities": n.capabilities,
+                   "online": bool(n.last_heartbeat and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S)}
+                  for n in nodes],
+    }
 
 
 @app.post("/admin/reset")
