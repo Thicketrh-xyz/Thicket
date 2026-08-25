@@ -22,6 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
+import { XLogo } from "./components/SiteChrome";
 
 const assets = {
   hero: "/manus-storage/thicket-hero-canopy_437b540a.png",
@@ -161,11 +162,6 @@ export default function Home() {
 
   return (
     <div id="top" className="site-shell">
-      <div className="announcement">
-        <span className="announcement__spark" />
-        <p>Testnet live on Robinhood Chain</p>
-        <a href="#participate">Choose your path <ArrowUpRight size={14} /></a>
-      </div>
 
       <header className="site-header">
         <nav className="nav-shell" aria-label="Main navigation">
@@ -178,7 +174,7 @@ export default function Home() {
           </div>
           <div className="nav-actions">
             <a className="nav-social" href="https://x.com/thicket_rh" target="_blank" rel="noreferrer" aria-label="Thicket on X">
-              <X size={16} />
+              <XLogo size={15} />
             </a>
             <a className="nav-social" href="https://github.com/Thicketrh-xyz/Thicket" target="_blank" rel="noreferrer" aria-label="Thicket on GitHub">
               <Github size={16} />

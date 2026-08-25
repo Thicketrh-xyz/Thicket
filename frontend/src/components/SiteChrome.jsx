@@ -1,4 +1,11 @@
-import { ArrowUpRight, Github, X } from "lucide-react";
+import { ArrowUpRight, Github } from "lucide-react";
+
+// The real X wordmark — lucide's `X` is a close icon, not the brand.
+export const XLogo = ({ size = 16 }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+  </svg>
+);
 
 const MARK = "/logo.png";
 const X_URL = "https://x.com/thicket_rh";
@@ -36,7 +43,7 @@ export function SiteHeader({ links = [], cta = null }) {
         </div>
         <div className="nav-actions">
           <a className="nav-social" href={X_URL} target="_blank" rel="noreferrer" aria-label="Thicket on X">
-            <X size={16} />
+            <XLogo size={15} />
           </a>
           <a className="nav-social" href={GITHUB} target="_blank" rel="noreferrer" aria-label="Thicket on GitHub">
             <Github size={16} />
