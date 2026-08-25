@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ArrowUpRight, Github, Mail } from "lucide-react";
 
 // The real X wordmark — lucide's `X` is a close icon, not the brand.
@@ -7,10 +8,33 @@ export const XLogo = ({ size = 16 }) => (
   </svg>
 );
 
-const MARK = "/logo-mark.png";
+const MARK = "/logo.png";
 const X_URL = "https://x.com/thicket_rh";
 const GITHUB = "https://github.com/Thicketrh-xyz/Thicket";
-const SUPPORT = "mailto:thicket@thicketrh.xyz";
+const SUPPORT_MAIL = "thicket@thicketrh.xyz";
+const SUPPORT = `mailto:${SUPPORT_MAIL}`;
+
+
+// mailto: silently does nothing when no mail client is configured, so show the
+// real address and copy it on click as a fallback.
+export function SupportLink() {
+  const [copied, setCopied] = useState(false);
+  return (
+    <a
+      className="footer__social"
+      href={SUPPORT}
+      onClick={() => {
+        navigator.clipboard?.writeText(SUPPORT_MAIL).then(
+          () => { setCopied(true); setTimeout(() => setCopied(false), 1800); },
+          () => {}
+        );
+      }}
+      title={`Email ${SUPPORT_MAIL}`}
+    >
+      <Mail size={15} /> {copied ? "Address copied" : SUPPORT_MAIL}
+    </a>
+  );
+}
 
 export function SectionLabel({ children, light = false }) {
   return (
@@ -85,9 +109,7 @@ export function SiteFooter() {
           <a className="footer__x" href={X_URL} target="_blank" rel="noreferrer" aria-label="Thicket on X">
             <XLogo size={20} />
           </a>
-          <a className="footer__social" href={SUPPORT}>
-            <Mail size={15} /> Contact support
-          </a>
+          <SupportLink />
         </div>
       </div>
       <div className="footer__legal">
