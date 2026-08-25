@@ -7,7 +7,7 @@ export const XLogo = ({ size = 16 }) => (
   </svg>
 );
 
-const MARK = "/logo.png";
+const MARK = "/logo-mark.png";
 const X_URL = "https://x.com/thicket_rh";
 const GITHUB = "https://github.com/Thicketrh-xyz/Thicket";
 const SUPPORT = "mailto:thicketrobinhood@gmail.com";

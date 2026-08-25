@@ -28,7 +28,7 @@ const assets = {
   hero: "/manus-storage/thicket-hero-canopy_437b540a.png",
   verification: "/manus-storage/thicket-verification-chamber_11c50065.png",
   network: "/manus-storage/thicket-network-crop_637c3275.png",
-  mark: "/logo.png",
+  mark: "/logo-mark.png",
 };
 
 const roles = [
