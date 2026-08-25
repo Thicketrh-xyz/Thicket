@@ -13,7 +13,8 @@ export function ComputePanel({ session, notify }) {
   const [kind, setKind] = useState("text");
   const [image, setImage] = useState(null);      // base64, no data: prefix
   const [imageName, setImageName] = useState("");
-  const [price, setPrice] = useState(10);
+  const [pricing, setPricing] = useState({ base_thkt: 5, per_1k_chars_thkt: 2, vision_thkt: 10 });
+  const [fileName, setFileName] = useState("");
   const [pool, setPool] = useState(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
@@ -21,7 +22,7 @@ export function ComputePanel({ session, notify }) {
 
   const [netCaps, setNetCaps] = useState(null);   // what online nodes can serve
 
-  useEffect(() => { fetchComputePrice().then((p) => p && setPrice(p.price_thkt)); }, []);
+  useEffect(() => { fetchComputePrice().then((p) => p && setPricing((x) => ({ ...x, ...p }))); }, []);
 
   // Never let someone pay for work no online node can do.
   useEffect(() => {
@@ -46,6 +47,13 @@ export function ComputePanel({ session, notify }) {
     const id = setInterval(load, 5000);
     return () => { alive = false; clearInterval(id); };
   }, [session]);
+
+  // Same formula the coordinator uses; it re-checks authoritatively on submit.
+  const price = Number((
+    pricing.base_thkt +
+    (prompt.length / 1000) * pricing.per_1k_chars_thkt +
+    (kind === "vision" ? pricing.vision_thkt : 0)
+  ).toFixed(2));
 
   async function run() {
     if (!session) return notify("Connect your wallet to run a job.");
@@ -117,9 +125,31 @@ export function ComputePanel({ session, notify }) {
             </div>
           )}
 
+          {kind === "text" && (
+            <div className="field">
+              <label>Attach a text file (optional)</label>
+              <input className="input" type="file" accept=".txt,.md,.csv,.json,text/*" onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) { setFileName(""); return; }
+                const reader = new FileReader();
+                reader.onload = () => {
+                  // Append the document to whatever instruction is already typed.
+                  const body = String(reader.result || "");
+                  setPrompt((cur) => (cur.trim() ? `${cur.trim()}\n\n${body}` : body));
+                  setFileName(f.name);
+                };
+                reader.readAsText(f);
+              }} />
+              {fileName && <p className="hint" style={{ marginTop: 8 }}>{fileName} loaded — {prompt.length.toLocaleString()} chars</p>}
+            </div>
+          )}
+
           <div className="field">
-            <label>{kind === "vision" ? "Question about the image" : "Prompt"}</label>
-            <input className="input"
+            <label>
+              <span>{kind === "vision" ? "Question about the image" : "Prompt"}</span>
+              {prompt.length > 0 && <span>{prompt.length.toLocaleString()} chars</span>}
+            </label>
+            <textarea className="input" rows={kind === "text" ? 5 : 2}
               placeholder={kind === "vision" ? "Describe this image." : "Ask the network to process something…"}
               value={prompt} onChange={(e) => setPrompt(e.target.value)} />
           </div>
@@ -132,6 +162,16 @@ export function ComputePanel({ session, notify }) {
               Payment is disabled so you don't pay for work nobody can do.
             </div>
           )}
+
+          <div className="kv-row" style={{ borderTop: "1px solid var(--line)", marginTop: 4 }}>
+            <span className="k">Price for this job</span>
+            <span className="v">{price} THKT</span>
+          </div>
+          <p className="hint" style={{ marginTop: 6, marginBottom: 14 }}>
+            {pricing.base_thkt} base + {pricing.per_1k_chars_thkt}/1k chars
+            {kind === "vision" ? ` + ${pricing.vision_thkt} image` : ""} — bigger jobs cost the
+            node more compute, so they cost more THKT.
+          </p>
 
           <button className="button button--primary" onClick={run}
             disabled={busy || !session || !CONTRACTS_LIVE || (netCaps && !netCaps.includes(kind))}>

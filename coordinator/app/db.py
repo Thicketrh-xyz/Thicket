@@ -60,14 +60,14 @@ class Job(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     kind: Mapped[str] = mapped_column(String(20), default="text")      # text | vision
-    prompt: Mapped[str] = mapped_column(String(2000), default="")
+    prompt: Mapped[str] = mapped_column(Text, default="")
     image: Mapped[str | None] = mapped_column(Text, nullable=True)      # base64, vision jobs
     payer: Mapped[str] = mapped_column(String(42), default="")
     payment_thkt: Mapped[float] = mapped_column(Float, default=0.0)  # THKT (wei overflows int8)
     payment_tx: Mapped[str] = mapped_column(String(80), default="")
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|assigned|done
     assigned_node: Mapped[str | None] = mapped_column(String(42), nullable=True)
-    result: Mapped[str | None] = mapped_column(String(4000), nullable=True)
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[float] = mapped_column(Float, default=0.0)
 
 
@@ -80,6 +80,10 @@ _ADDED = [
 ]
 
 
+# Columns whose type outgrew the original definition (VARCHAR -> TEXT).
+_WIDENED = [("jobs", "prompt"), ("jobs", "result")]
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
     insp = inspect(engine)
@@ -90,6 +94,12 @@ def init_db() -> None:
             existing = {c["name"] for c in insp.get_columns(table)}
             if column not in existing:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+
+        # SQLite is dynamically typed and rejects this syntax; only Postgres needs it.
+        if engine.dialect.name == "postgresql":
+            for table, column in _WIDENED:
+                if insp.has_table(table):
+                    conn.execute(text(f"ALTER TABLE {table} ALTER COLUMN {column} TYPE TEXT"))
 
 
 def session_scope():

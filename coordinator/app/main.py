@@ -43,7 +43,13 @@ CHALLENGE_SIZE = int(os.getenv("CHALLENGE_SIZE", "128"))
 MAX_FAILS_BEFORE_SLASH = int(os.getenv("MAX_FAILS_BEFORE_SLASH", "3"))
 SLASH_AMOUNT_WEI = int(float(os.getenv("SLASH_AMOUNT_THKT", "100")) * 10**18)
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
-COMPUTE_PRICE_THKT = float(os.getenv("COMPUTE_PRICE_THKT", "10"))  # price per job
+# --- pricing ---------------------------------------------------------------
+# Work is priced by how much compute it actually costs a node: a one-line prompt
+# and a 50-page document are not the same job. Buyers are quoted before paying.
+COMPUTE_BASE_THKT = float(os.getenv("COMPUTE_BASE_THKT", "5"))        # per-job overhead
+COMPUTE_PER_1K_CHARS = float(os.getenv("COMPUTE_PER_1K_CHARS", "2"))  # input size
+COMPUTE_VISION_THKT = float(os.getenv("COMPUTE_VISION_THKT", "10"))   # image surcharge
+COMPUTE_PRICE_THKT = COMPUTE_BASE_THKT                                # legacy floor
 JOB_ASSIGN_TIMEOUT_S = int(os.getenv("JOB_ASSIGN_TIMEOUT_S", "180"))  # requeue if unfinished
 
 chain = chain_bridge()
@@ -239,9 +245,37 @@ class JobResultReq(BaseModel):
     result: str
 
 
+def quote_job(kind: str, prompt: str, has_image: bool) -> float:
+    """What this specific job should cost, in THKT."""
+    price = COMPUTE_BASE_THKT
+    price += (len(prompt or "") / 1000.0) * COMPUTE_PER_1K_CHARS
+    if kind == "vision" or has_image:
+        price += COMPUTE_VISION_THKT
+    return round(price, 2)
+
+
 @app.get("/compute/price")
 def compute_price():
-    return {"price_thkt": COMPUTE_PRICE_THKT}
+    """Pricing parameters — the client quotes live from these, the server is
+    authoritative at submission time."""
+    return {
+        "price_thkt": COMPUTE_BASE_THKT,          # kept for older clients
+        "base_thkt": COMPUTE_BASE_THKT,
+        "per_1k_chars_thkt": COMPUTE_PER_1K_CHARS,
+        "vision_thkt": COMPUTE_VISION_THKT,
+    }
+
+
+class QuoteReq(BaseModel):
+    kind: str = "text"
+    prompt: str = ""
+    has_image: bool = False
+
+
+@app.post("/compute/quote")
+def compute_quote(req: QuoteReq):
+    return {"price_thkt": quote_job(req.kind, req.prompt, req.has_image),
+            "chars": len(req.prompt or "")}
 
 
 @app.post("/jobs")
@@ -260,21 +294,22 @@ def submit_job(req: JobReq, db: Session = Depends(get_db)):
     if req.payment_tx and db.query(Job).filter(Job.payment_tx == req.payment_tx).first():
         raise HTTPException(400, "payment already used")
 
-    # Verify the payment actually funded the pool (skipped only in DRY mode).
+    # Price this job by its actual size, then require the payment to cover it.
+    price = quote_job(req.kind, req.prompt, bool(req.image))
     if not chain.dry:
-        if req.payment_thkt < COMPUTE_PRICE_THKT:
-            raise HTTPException(402, f"payment below price ({COMPUTE_PRICE_THKT} THKT)")
-        if not req.payment_tx or not chain.verify_payment(req.payment_tx, req.payer, COMPUTE_PRICE_THKT):
+        if req.payment_thkt + 1e-9 < price:
+            raise HTTPException(402, f"payment below price for this job ({price} THKT)")
+        if not req.payment_tx or not chain.verify_payment(req.payment_tx, req.payer, price):
             raise HTTPException(402, "payment not verified on-chain")
 
     jid = secrets.token_hex(8)
     db.add(Job(
-        id=jid, kind=req.kind, prompt=req.prompt[:2000], image=req.image, payer=req.payer,
+        id=jid, kind=req.kind, prompt=req.prompt, image=req.image, payer=req.payer,
         payment_thkt=req.payment_thkt, payment_tx=req.payment_tx,
         status="pending", created_at=time.time(),
     ))
     db.commit()
-    return {"id": jid, "status": "pending"}
+    return {"id": jid, "status": "pending", "price_thkt": price}
 
 
 @app.get("/jobs/{jid}")
@@ -291,7 +326,7 @@ def job_result(jid: str, req: JobResultReq, db: Session = Depends(get_db)):
     job = db.get(Job, jid)
     if not job or job.assigned_node != req.address:
         raise HTTPException(400, "not your job")
-    job.result = (req.result or "")[:4000]
+    job.result = req.result or ""
     job.status = "done"
     bump_tasks(db)
     db.commit()
