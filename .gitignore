@@ -23,3 +23,6 @@ node/src-tauri/target/
 
 # os
 .DS_Store
+
+# design reference (local only)
+reference/

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatUnits } from "ethers";
+import { ArrowUpRight } from "lucide-react";
 import { registerOperator, delegate, getStakingInfo } from "../lib/chain";
 import { CONTRACTS_LIVE, explorerTx } from "../config";
+import { SectionLabel } from "./SiteChrome";
 
 const fmt = (wei) => (wei == null ? "—" : Number(formatUnits(wei, 18)).toLocaleString("en-US"));
 
@@ -11,19 +13,16 @@ export function StakePanel({ session, notify }) {
   const [nodeId, setNodeId] = useState("node-1");
   const [operator, setOperator] = useState("");
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState(null); // { text, hash? }
-  const [info, setInfo] = useState(null);      // { balance, minStake, registered, selfStake, ... }
+  const [status, setStatus] = useState(null);
+  const [info, setInfo] = useState(null);
 
   const loadInfo = useCallback(async () => {
     if (!session || !CONTRACTS_LIVE) return setInfo(null);
     try {
       const i = await getStakingInfo(session.signer, session.address);
       setInfo(i);
-      // default the amount to the minimum bond the first time we learn it
       setAmount((a) => a || (i ? formatUnits(i.minStake, 18) : ""));
-    } catch {
-      setInfo(null);
-    }
+    } catch { setInfo(null); }
   }, [session]);
 
   useEffect(() => { loadInfo(); }, [loadInfo]);
@@ -51,86 +50,77 @@ export function StakePanel({ session, notify }) {
     } catch (e) {
       setStatus(null);
       notify(e.shortMessage || e.reason || e.message || "Transaction failed");
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
   const insufficient = info && amount && Number(amount) > Number(formatUnits(info.balance, 18));
   const alreadyOperator = tab === "operator" && info?.registered;
 
   return (
-    <section className="section" id="stake" style={{ paddingTop: 0 }}>
-      <div className="container">
-        <h2>Stake</h2>
-        <p className="sub">Bond as an operator to run a node, or delegate to one and share its rewards.</p>
+    <section className="section-block" id="stake">
+      <SectionLabel>Stake</SectionLabel>
+      <div className="page-intro" style={{ padding: "10px 0 24px" }}>
+        <h1 style={{ fontSize: "1.9rem" }}>Bond in, or back an operator.</h1>
+        <p>Stake to run your own node, or delegate to one and share the rewards it earns.</p>
+      </div>
 
-        <div className="grid2">
-          <div className="card">
-            <div className="tabs">
-              <button className={tab === "operator" ? "active" : ""} onClick={() => setTab("operator")}>Run a node</button>
-              <button className={tab === "delegate" ? "active" : ""} onClick={() => setTab("delegate")}>Delegate</button>
-            </div>
+      <div className="panel-grid">
+        <div className="panel">
+          <div className="tabs">
+            <button className={tab === "operator" ? "is-active" : ""} onClick={() => setTab("operator")}>Run a node</button>
+            <button className={tab === "delegate" ? "is-active" : ""} onClick={() => setTab("delegate")}>Delegate</button>
+          </div>
 
-            {tab === "operator" ? (
-              <div className="field">
-                <label>Node ID</label>
-                <input className="input" placeholder="node-1" value={nodeId} onChange={(e) => setNodeId(e.target.value)} />
-              </div>
-            ) : (
-              <div className="field">
-                <label>Operator address</label>
-                <input className="input" placeholder="0x…" value={operator} onChange={(e) => setOperator(e.target.value)} />
-              </div>
-            )}
-
+          {tab === "operator" ? (
             <div className="field">
-              <label>
-                Amount (THKT)
-                {info && (
-                  <span style={{ float: "right", fontWeight: 500 }}>
-                    Balance: {fmt(info.balance)} · min {fmt(info.minStake)}
-                  </span>
-                )}
-              </label>
-              <input className="input" type="number" min="0" placeholder="1000"
-                value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <label>Node ID</label>
+              <input className="input" placeholder="node-1" value={nodeId} onChange={(e) => setNodeId(e.target.value)} />
             </div>
+          ) : (
+            <div className="field">
+              <label>Operator address</label>
+              <input className="input" placeholder="0x…" value={operator} onChange={(e) => setOperator(e.target.value)} />
+            </div>
+          )}
 
-            {alreadyOperator ? (
-              <div className="modal-note" style={{ marginBottom: 12 }}>
-                ✓ This wallet is bonded — {fmt(info.selfStake)} THKT staked as an operator.
-              </div>
-            ) : null}
-
-            <button className="btn" onClick={submit}
-              disabled={busy || !session || !CONTRACTS_LIVE || alreadyOperator || insufficient}>
-              {busy ? (status?.text || "Confirming…")
-                : tab === "operator" ? "Bond & register" : "Delegate"}
-            </button>
-
-            {!session && <p className="muted" style={{ marginTop: 12 }}>Connect your wallet to stake.</p>}
-            {insufficient && <p className="muted" style={{ marginTop: 12, color: "var(--error)" }}>Not enough THKT in this wallet.</p>}
-            {status?.hash && (
-              <p className="muted" style={{ marginTop: 12 }}>
-                {status.text} — <a href={explorerTx(status.hash)} target="_blank" rel="noreferrer">view transaction ↗</a>
-              </p>
-            )}
+          <div className="field">
+            <label>
+              <span>Amount (THKT)</span>
+              {info && <span>Balance {fmt(info.balance)} · min {fmt(info.minStake)}</span>}
+            </label>
+            <input className="input" type="number" min="0" placeholder="1000"
+              value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
 
-          <div className="card">
-            <h3>Why stake?</h3>
-            <div style={{ marginTop: 10 }}>
-              <div className="kv"><span className="k">Operator bond</span><span className="v">Skin in the game — slashable</span></div>
-              <div className="kv"><span className="k">Anti-sybil</span><span className="v">Bond + live challenges</span></div>
-              <div className="kv"><span className="k">Delegators</span><span className="v">Earn without hardware</span></div>
-              <div className="kv"><span className="k">Unbonding</span><span className="v">7-day cooldown</span></div>
-            </div>
-            <p className="muted" style={{ marginTop: 14 }}>
-              A node that fails its inference challenges has its earnings voided and, on repeated
-              failure, its bond slashed.
+          {alreadyOperator && (
+            <div className="note">✓ This wallet is bonded — {fmt(info.selfStake)} THKT staked as an operator.</div>
+          )}
+
+          <button className="button button--primary" style={{ marginTop: 14 }} onClick={submit}
+            disabled={busy || !session || !CONTRACTS_LIVE || alreadyOperator || insufficient}>
+            {busy ? (status?.text || "Confirming…") : tab === "operator" ? "Bond & register" : "Delegate"}
+          </button>
+
+          {!session && <p className="hint">Connect your wallet to stake.</p>}
+          {insufficient && <p className="hint">Not enough THKT in this wallet.</p>}
+          {status?.hash && (
+            <p className="hint">
+              {status.text} — <a href={explorerTx(status.hash)} target="_blank" rel="noreferrer">view transaction <ArrowUpRight size={12} /></a>
             </p>
+          )}
+        </div>
+
+        <div className="panel">
+          <h3>Why stake?</h3>
+          <div style={{ marginTop: 12 }}>
+            <div className="kv-row"><span className="k">Operator bond</span><span className="v">Slashable</span></div>
+            <div className="kv-row"><span className="k">Anti-sybil</span><span className="v">Bond + live challenges</span></div>
+            <div className="kv-row"><span className="k">Delegators</span><span className="v">Earn without hardware</span></div>
+            <div className="kv-row"><span className="k">Unbonding</span><span className="v">7-day cooldown</span></div>
           </div>
+          <p className="panel__hint" style={{ marginTop: 16, marginBottom: 0 }}>
+            A node that fails its challenges has its earnings voided and, on repeated failure, its bond slashed.
+          </p>
         </div>
       </div>
     </section>

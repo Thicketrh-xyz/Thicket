@@ -3,7 +3,14 @@ import { fetchStats } from "../lib/api";
 
 const fmt = (n) => (n == null ? "—" : Math.round(Number(n)).toLocaleString("en-US"));
 
-// Live network stats bar for the portal — a dashboard-style header.
+const TILES = [
+  ["active_nodes", "Active nodes"],
+  ["tasks_executed", "Tasks executed"],
+  ["jobs_running", "Jobs running"],
+  ["pool_thkt", "Rewards pool · THKT"],
+];
+
+// Live network figures across the top of the portal.
 export function PortalStats() {
   const [s, setS] = useState(null);
   useEffect(() => {
@@ -14,22 +21,14 @@ export function PortalStats() {
     return () => { alive = false; clearInterval(id); };
   }, []);
 
-  const items = [
-    ["active_nodes", "Active nodes"],
-    ["tasks_executed", "Tasks executed"],
-    ["jobs_running", "Jobs running"],
-    ["pool_thkt", "Rewards pool · THKT"],
-  ];
   return (
-    <div className="container">
-      <div className="stats cols4">
-        {items.map(([k, l]) => (
-          <div className="stat" key={k}>
-            <div className="val">{fmt(s?.[k])}</div>
-            <div className="lbl">{l}</div>
-          </div>
-        ))}
-      </div>
+    <div className="tile-row">
+      {TILES.map(([k, label]) => (
+        <div className="tile" key={k}>
+          <div className="tile__k">{label}</div>
+          <div className="tile__v">{fmt(s?.[k])}</div>
+        </div>
+      ))}
     </div>
   );
 }

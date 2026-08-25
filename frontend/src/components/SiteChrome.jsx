@@ -1,0 +1,88 @@
+import { ArrowUpRight, Github, X } from "lucide-react";
+
+const MARK = "/manus-storage/thicket-mark_b88e5196.png";
+const X_URL = "https://x.com/thicket_rh";
+const GITHUB = "https://github.com/Thicketrh-xyz/Thicket";
+const SUPPORT = "mailto:thicketrobinhood@gmail.com";
+
+export function SectionLabel({ children, light = false }) {
+  return (
+    <div className={`section-label ${light ? "section-label--light" : ""}`}>
+      <span className="section-label__dot" />
+      {children}
+    </div>
+  );
+}
+
+export function BrandMark({ compact = false }) {
+  return (
+    <a className="brand" href="/" aria-label="Thicket home">
+      <span className={`brand__mark ${compact ? "brand__mark--compact" : ""}`}>
+        <img src={MARK} alt="" />
+      </span>
+      {!compact && <span className="brand__word">Thicket</span>}
+    </a>
+  );
+}
+
+// Shared header. `cta` lets the portal swap "Launch app" for the wallet button.
+export function SiteHeader({ links = [], cta = null }) {
+  return (
+    <header className="site-header">
+      <nav className="nav-shell" aria-label="Main navigation">
+        <BrandMark />
+        <div className="nav-links">
+          {links.map((l) => <a key={l.href} href={l.href}>{l.label}</a>)}
+        </div>
+        <div className="nav-actions">
+          <a className="nav-social" href={X_URL} target="_blank" rel="noreferrer" aria-label="Thicket on X">
+            <X size={16} />
+          </a>
+          <a className="nav-social" href={GITHUB} target="_blank" rel="noreferrer" aria-label="Thicket on GitHub">
+            <Github size={16} />
+          </a>
+          {cta ?? (
+            <a className="button button--primary button--small" href="/app">
+              Launch app <ArrowUpRight size={15} />
+            </a>
+          )}
+        </div>
+      </nav>
+    </header>
+  );
+}
+
+export function SiteFooter() {
+  return (
+    <footer className="footer">
+      <div className="footer__brand">
+        <BrandMark />
+        <p>A decentralized GPU network. Grow the thicket, earn from your compute.</p>
+        <div className="footer__status"><span /> TESTNET OPERATIONAL</div>
+      </div>
+      <div className="footer__links">
+        <div>
+          <span>NETWORK</span>
+          <a href="/docs#run-a-node">Run a node</a>
+          <a href="/app#stake">Stake THKT</a>
+          <a href="/#roadmap">Roadmap</a>
+        </div>
+        <div>
+          <span>DEVELOPERS</span>
+          <a href="/#verification">How it works</a>
+          <a href="/docs">Documentation</a>
+          <a href={GITHUB} target="_blank" rel="noreferrer">GitHub</a>
+        </div>
+        <div>
+          <span>COMMUNITY</span>
+          <a href={X_URL} target="_blank" rel="noreferrer">X / @thicket_rh</a>
+          <a href={SUPPORT}>Contact support</a>
+        </div>
+      </div>
+      <div className="footer__legal">
+        <span>© 2026 THICKET</span>
+        <span>Built on Robinhood Chain</span>
+      </div>
+    </footer>
+  );
+}

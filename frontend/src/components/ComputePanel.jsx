@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { formatUnits } from "ethers";
+import { ArrowUpRight } from "lucide-react";
 import { fetchComputePrice, submitJob, fetchJob } from "../lib/api";
 import { payForCompute, getPoolBalance } from "../lib/chain";
 import { CONTRACTS_LIVE, explorerTx } from "../config";
+import { SectionLabel } from "./SiteChrome";
 
 const fmt = (n) => (n == null ? "—" : Math.round(Number(n)).toLocaleString("en-US"));
 
@@ -11,8 +13,8 @@ export function ComputePanel({ session, notify }) {
   const [price, setPrice] = useState(10);
   const [pool, setPool] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState(null); // { text, hash? }
-  const [job, setJob] = useState(null);        // { id, status, result }
+  const [status, setStatus] = useState(null);
+  const [job, setJob] = useState(null);
 
   useEffect(() => { fetchComputePrice().then((p) => p && setPrice(p.price_thkt)); }, []);
 
@@ -63,43 +65,39 @@ export function ComputePanel({ session, notify }) {
   }
 
   return (
-    <section className="section mist" id="compute">
-      <div className="container">
-        <h2>Run compute</h2>
-        <p className="sub">Pay THKT to run an inference job. Your payment flows into the rewards pool that pays the miners — the demand side that funds the network.</p>
+    <section className="section-block" id="compute">
+      <SectionLabel>Run compute</SectionLabel>
+      <div className="page-intro" style={{ padding: "10px 0 24px" }}>
+        <h1 style={{ fontSize: "1.9rem" }}>Pay THKT. Get verified compute.</h1>
+        <p>Your payment flows into the rewards pool that pays the operators — the demand side that funds the network.</p>
+      </div>
 
-        <div className="grid2">
-          <div className="card">
-            <div className="field">
-              <label>Prompt</label>
-              <input className="input" placeholder="Ask the network to process something…"
-                value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-            </div>
-            <button className="btn" onClick={run} disabled={busy || !session || !CONTRACTS_LIVE}>
-              {busy ? (status?.text || "Working…") : `Run job · ${price} THKT`}
-            </button>
-            {!session && <p className="muted" style={{ marginTop: 12 }}>Connect your wallet to run a job.</p>}
-            {status?.hash && (
-              <p className="muted" style={{ marginTop: 12 }}>
-                {status.text} — <a href={explorerTx(status.hash)} target="_blank" rel="noreferrer">payment tx ↗</a>
-              </p>
-            )}
-            {job?.result && (
-              <div className="modal-note" style={{ marginTop: 16 }}>
-                <b>Result</b><br />{job.result}
-              </div>
-            )}
+      <div className="panel-grid">
+        <div className="panel">
+          <div className="field">
+            <label>Prompt</label>
+            <input className="input" placeholder="Ask the network to process something…"
+              value={prompt} onChange={(e) => setPrompt(e.target.value)} />
           </div>
-
-          <div className="card">
-            <h3>Rewards pool</h3>
-            <p className="muted">Every job payment refills this pool — the source miners earn from. This is what makes THKT an economy, not an inflation faucet.</p>
-            <div className="big-num" style={{ margin: "12px 0 2px" }}>{fmt(pool)}</div>
-            <div className="muted">THKT in the pool</div>
-            <p className="muted" style={{ marginTop: 14 }}>
-              Placeholder execution for now — a real GPU model runtime plugs in on the node side (roadmap: Sapling).
+          <button className="button button--primary" onClick={run} disabled={busy || !session || !CONTRACTS_LIVE}>
+            {busy ? (status?.text || "Working…") : `Run job · ${price} THKT`}
+          </button>
+          {!session && <p className="hint">Connect your wallet to run a job.</p>}
+          {status?.hash && (
+            <p className="hint">
+              {status.text} — <a href={explorerTx(status.hash)} target="_blank" rel="noreferrer">payment tx <ArrowUpRight size={12} /></a>
             </p>
-          </div>
+          )}
+          {job?.result && <div className="note"><b>Result</b><br />{job.result}</div>}
+        </div>
+
+        <div className="panel">
+          <div className="figure-cap">Rewards pool</div>
+          <div className="big-figure">{fmt(pool)}</div>
+          <p className="panel__hint" style={{ marginTop: 6 }}>THKT available to pay operators</p>
+          <p className="panel__hint" style={{ margin: 0 }}>
+            Every job payment refills this pool. That's what makes THKT an economy rather than an inflation faucet.
+          </p>
         </div>
       </div>
     </section>
