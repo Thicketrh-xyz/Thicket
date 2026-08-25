@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatUnits } from "ethers";
 import { ArrowUpRight } from "lucide-react";
-import { fetchComputePrice, submitJob, fetchJob } from "../lib/api";
+import { fetchComputePrice, submitJob, fetchJob, fetchStats } from "../lib/api";
 import { payForCompute, getPoolBalance } from "../lib/chain";
 import { CONTRACTS_LIVE, explorerTx } from "../config";
 import { SectionLabel } from "./SiteChrome";
@@ -19,7 +19,21 @@ export function ComputePanel({ session, notify }) {
   const [status, setStatus] = useState(null);
   const [job, setJob] = useState(null);
 
+  const [netCaps, setNetCaps] = useState(null);   // what online nodes can serve
+
   useEffect(() => { fetchComputePrice().then((p) => p && setPrice(p.price_thkt)); }, []);
+
+  // Never let someone pay for work no online node can do.
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      const s = await fetchStats();
+      if (alive && s) setNetCaps(s.capabilities || []);
+    };
+    load();
+    const id = setInterval(load, 10000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
 
   useEffect(() => {
     if (!session || !CONTRACTS_LIVE) { setPool(null); return; }
@@ -38,6 +52,8 @@ export function ComputePanel({ session, notify }) {
     if (!CONTRACTS_LIVE) return notify("Contracts aren't deployed.");
     if (kind === "text" && !prompt.trim()) return notify("Enter a prompt.");
     if (kind === "vision" && !image) return notify("Choose an image to caption.");
+    if (netCaps && !netCaps.includes(kind))
+      return notify(`No node online can run ${kind} jobs right now — your THKT would be spent on work nobody can do.`);
     setJob(null); setStatus(null);
     try {
       setBusy(true);
@@ -107,7 +123,18 @@ export function ComputePanel({ session, notify }) {
               placeholder={kind === "vision" ? "Describe this image." : "Ask the network to process something…"}
               value={prompt} onChange={(e) => setPrompt(e.target.value)} />
           </div>
-          <button className="button button--primary" onClick={run} disabled={busy || !session || !CONTRACTS_LIVE}>
+          {netCaps && !netCaps.includes(kind) && (
+            <div className="note" style={{ marginBottom: 14 }}>
+              <b>No node can run {kind === "vision" ? "image → text" : kind} jobs right now.</b><br />
+              {netCaps.length
+                ? `The network currently serves: ${netCaps.join(", ")}.`
+                : "No nodes with a model runtime are online."}{" "}
+              Payment is disabled so you don't pay for work nobody can do.
+            </div>
+          )}
+
+          <button className="button button--primary" onClick={run}
+            disabled={busy || !session || !CONTRACTS_LIVE || (netCaps && !netCaps.includes(kind))}>
             {busy ? (status?.text || "Working…") : `Run job · ${price} THKT`}
           </button>
           {!session && <p className="hint">Connect your wallet to run a job.</p>}
