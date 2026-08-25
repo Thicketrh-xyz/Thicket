@@ -75,6 +75,7 @@ class RegisterReq(BaseModel):
     address: str
     node_id: str
     signature: str
+    capabilities: list[str] = []      # e.g. ["text", "vision"]
 
 
 class HeartbeatReq(BaseModel):
@@ -111,6 +112,9 @@ def stats(db: Session = Depends(get_db)):
         "minutes_contributed": round(total_earned / REWARD_PER_MINUTE, 1),
         "thkt_earned": round(total_earned, 2),
         "pool_thkt": round(chain.pool_balance(), 2),           # rewards pool balance (on-chain)
+        "capabilities": sorted({c for n in nodes if n.last_heartbeat
+                                and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S
+                                for c in (n.capabilities or "").split(",") if c}),
     }
 
 
@@ -123,6 +127,7 @@ def register(req: RegisterReq, db: Session = Depends(get_db)):
         raise HTTPException(403, "operator not bonded on-chain")
     node = db.get(Node, req.address) or Node(address=req.address)
     node.node_id = req.node_id
+    node.capabilities = ",".join(sorted({c.strip() for c in req.capabilities if c.strip()}))
     db.merge(node)
     db.commit()
     return {"ok": True, "reward_per_minute": float(os.getenv("REWARD_PER_MINUTE", "1.0"))}
@@ -152,13 +157,18 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
         node.last_challenge_at = now
         challenge = ch.to_dict()
 
-    # Hand this online node a pending compute job, if any.
+    # Hand this node a pending job it can actually run (capability-matched).
     job_payload = None
-    pending = db.query(Job).filter(Job.status == "pending").order_by(Job.created_at).first()
-    if pending:
-        pending.status = "assigned"
-        pending.assigned_node = req.address
-        job_payload = {"id": pending.id, "prompt": pending.prompt}
+    node_caps = {c for c in (node.capabilities or "").split(",") if c}
+    if node_caps:
+        pending = (db.query(Job)
+                     .filter(Job.status == "pending", Job.kind.in_(node_caps))
+                     .order_by(Job.created_at).first())
+        if pending:
+            pending.status = "assigned"
+            pending.assigned_node = req.address
+            job_payload = {"id": pending.id, "kind": pending.kind,
+                           "prompt": pending.prompt, "image": pending.image}
 
     db.commit()
     return {
@@ -208,6 +218,8 @@ def claims():
 class JobReq(BaseModel):
     prompt: str
     payer: str
+    kind: str = "text"          # text | vision
+    image: str | None = None    # base64 (vision jobs)
     payment_tx: str = ""       # the fund() tx that paid into the pool
     payment_thkt: float = 0.0
 
@@ -227,8 +239,12 @@ def submit_job(req: JobReq, db: Session = Depends(get_db)):
     """Record a paid job. Payment is the on-chain fund() into the rewards pool;
     for the MVP we trust the client-provided tx (production would verify it on
     chain). The job is then assigned to the next online node via heartbeat."""
-    if not req.prompt.strip():
+    if req.kind not in ("text", "vision"):
+        raise HTTPException(400, "kind must be 'text' or 'vision'")
+    if req.kind == "text" and not req.prompt.strip():
         raise HTTPException(400, "empty prompt")
+    if req.kind == "vision" and not req.image:
+        raise HTTPException(400, "vision jobs need an image")
 
     # No reusing one payment for multiple jobs.
     if req.payment_tx and db.query(Job).filter(Job.payment_tx == req.payment_tx).first():
@@ -243,7 +259,7 @@ def submit_job(req: JobReq, db: Session = Depends(get_db)):
 
     jid = secrets.token_hex(8)
     db.add(Job(
-        id=jid, prompt=req.prompt[:2000], payer=req.payer,
+        id=jid, kind=req.kind, prompt=req.prompt[:2000], image=req.image, payer=req.payer,
         payment_thkt=req.payment_thkt, payment_tx=req.payment_tx,
         status="pending", created_at=time.time(),
     ))
@@ -256,7 +272,7 @@ def get_job(jid: str, db: Session = Depends(get_db)):
     job = db.get(Job, jid)
     if not job:
         raise HTTPException(404, "no such job")
-    return {"id": job.id, "status": job.status, "prompt": job.prompt,
+    return {"id": job.id, "kind": job.kind, "status": job.status, "prompt": job.prompt,
             "result": job.result, "node": job.assigned_node}
 
 

@@ -21,15 +21,33 @@ def _lcg(seed: int):
         yield state % _PRIME
 
 
-def run_job(prompt: str) -> str:
-    """Execute a paid compute job. Placeholder 'inference' — a deterministic
-    transform standing in for a real model runtime (the GPU model is the Sapling
-    roadmap item; swap it in here without changing the client loop)."""
-    from hashlib import sha256
-    ref = sha256(prompt.encode()).hexdigest()[:10]
-    words = len(prompt.split())
-    return (f"[thicket-node output] processed prompt ({words} words). "
-            f"A real model runs here in production. ref={ref}")
+def run_job(job) -> str:
+    """Execute a paid compute job.
+
+    Accepts either a plain prompt string (legacy) or the full job dict from the
+    coordinator: {kind, prompt, image}. Runs on the local model runtime; if no
+    runtime is installed we say so plainly rather than returning fake output.
+    """
+    from .runtime import run as run_model, detect_capabilities
+
+    if isinstance(job, str):
+        kind, prompt, image = "text", job, None
+    else:
+        kind = job.get("kind") or "text"
+        prompt = job.get("prompt") or ""
+        image = job.get("image")
+
+    caps = detect_capabilities()
+    if not caps["caps"]:
+        # No model runtime on this machine. Be honest about it — never pretend
+        # work happened. The node still earns from uptime + challenges.
+        return ("[thicket] no model runtime installed on this node. "
+                "Install Ollama and pull a model to serve real jobs.")
+
+    result = run_model(kind, prompt, image)
+    if not result["ok"]:
+        return f"[thicket] {result['output']}"
+    return result["output"]
 
 
 def solve_challenge(challenge: dict) -> str:

@@ -56,6 +56,29 @@ That's it. The node bonds itself on-chain, registers, and starts earning. Watch 
 | **Flag** *(quickest)* | `--key 0xYOUR_KEY` | Convenient, but the key lands in your shell history |
 | **File** *(persistent)* | `echo 'THICKET_PRIVATE_KEY=0xYOUR_KEY' >> .env` | Set once, then just run the client |
 
+### Serve real AI jobs (optional but recommended)
+
+Uptime alone earns THKT. To also get **paid compute jobs**, install
+[Ollama](https://ollama.com) and pull a model — the node detects what you have and
+advertises only what it can actually run.
+
+```bash
+# text jobs (small + fast, runs on most laptops)
+ollama pull llama3.2:1b
+
+# image -> text jobs, e.g. captioning (heavier)
+ollama pull llava:7b
+```
+
+Restart the node and it will print what it can serve:
+
+```
+[thicket] serving jobs: text=llama3.2:1b, vision=llava:7b
+```
+
+No Ollama? The node says so plainly and keeps earning from uptime — it just won't be
+handed jobs it can't do.
+
 ### Handy flags
 
 ```bash

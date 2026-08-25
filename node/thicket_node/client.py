@@ -23,6 +23,7 @@ from eth_account.messages import encode_defunct
 
 from .bond import ensure_bonded
 from .config import Config
+from .runtime import detect_capabilities
 from .work import run_job, solve_challenge
 
 
@@ -39,11 +40,19 @@ class ThicketNode:
 
     def register(self) -> None:
         msg = f"thicket-register:{self.address}:{self.node_id}"
+        caps = detect_capabilities()
         r = requests.post(f"{self.coordinator}/register",
                           json={"address": self.address, "node_id": self.node_id,
-                                "signature": self._sign(msg)}, timeout=10)
+                                "signature": self._sign(msg),
+                                "capabilities": caps["caps"]}, timeout=10)
         r.raise_for_status()
         print(f"[thicket] registered {self.address} — {r.json()['reward_per_minute']} THKT/min")
+        if caps["caps"]:
+            served = ", ".join(f"{k}={v}" for k, v in caps["models"].items())
+            print(f"[thicket] serving jobs: {served}")
+        else:
+            print("[thicket] no model runtime found — earning from uptime only.")
+            print("[thicket] to serve paid jobs: install Ollama, then `ollama pull llama3.2:1b`")
 
     def run(self) -> None:
         print(f"[thicket] node {self.address} (id={self.node_id})")
@@ -71,8 +80,8 @@ class ThicketNode:
             self._handle_job(data["job"])
 
     def _handle_job(self, job: dict) -> None:
-        print(f"[thicket] compute job {job['id']} — running")
-        result = run_job(job["prompt"])
+        print(f"[thicket] compute job {job['id']} ({job.get('kind', 'text')}) — running")
+        result = run_job(job)
         requests.post(f"{self.coordinator}/jobs/{job['id']}/result",
                       json={"address": self.address, "result": result}, timeout=120)
         print(f"[thicket] job {job['id']} done")

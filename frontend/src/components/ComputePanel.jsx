@@ -10,6 +10,9 @@ const fmt = (n) => (n == null ? "—" : Math.round(Number(n)).toLocaleString("en
 
 export function ComputePanel({ session, notify }) {
   const [prompt, setPrompt] = useState("");
+  const [kind, setKind] = useState("text");
+  const [image, setImage] = useState(null);      // base64, no data: prefix
+  const [imageName, setImageName] = useState("");
   const [price, setPrice] = useState(10);
   const [pool, setPool] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -33,13 +36,14 @@ export function ComputePanel({ session, notify }) {
   async function run() {
     if (!session) return notify("Connect your wallet to run a job.");
     if (!CONTRACTS_LIVE) return notify("Contracts aren't deployed.");
-    if (!prompt.trim()) return notify("Enter a prompt.");
+    if (kind === "text" && !prompt.trim()) return notify("Enter a prompt.");
+    if (kind === "vision" && !image) return notify("Choose an image to caption.");
     setJob(null); setStatus(null);
     try {
       setBusy(true);
       const tx = await payForCompute(session.signer, price, (text) => setStatus({ text }));
       setStatus({ text: "Submitting job…", hash: tx });
-      const j = await submitJob(prompt, session.address, tx, price);
+      const j = await submitJob(prompt, session.address, tx, price, kind, image);
       if (!j?.id) throw new Error("Job submission failed");
 
       setStatus({ text: "Waiting for a node…", hash: tx });
@@ -74,9 +78,33 @@ export function ComputePanel({ session, notify }) {
 
       <div className="panel-grid">
         <div className="panel">
+          <div className="tabs">
+            <button className={kind === "text" ? "is-active" : ""} onClick={() => setKind("text")}>Text</button>
+            <button className={kind === "vision" ? "is-active" : ""} onClick={() => setKind("vision")}>Image → text</button>
+          </div>
+
+          {kind === "vision" && (
+            <div className="field">
+              <label>Image</label>
+              <input className="input" type="file" accept="image/*" onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) { setImage(null); setImageName(""); return; }
+                const reader = new FileReader();
+                reader.onload = () => {
+                  // strip the "data:image/png;base64," prefix — the model wants raw base64
+                  setImage(String(reader.result).split(",")[1] || null);
+                  setImageName(f.name);
+                };
+                reader.readAsDataURL(f);
+              }} />
+              {imageName && <p className="hint" style={{ marginTop: 8 }}>{imageName} ready</p>}
+            </div>
+          )}
+
           <div className="field">
-            <label>Prompt</label>
-            <input className="input" placeholder="Ask the network to process something…"
+            <label>{kind === "vision" ? "Question about the image" : "Prompt"}</label>
+            <input className="input"
+              placeholder={kind === "vision" ? "Describe this image." : "Ask the network to process something…"}
               value={prompt} onChange={(e) => setPrompt(e.target.value)} />
           </div>
           <button className="button button--primary" onClick={run} disabled={busy || !session || !CONTRACTS_LIVE}>

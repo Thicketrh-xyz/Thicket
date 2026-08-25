@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 
-from sqlalchemy import BigInteger, Float, Integer, String, create_engine
+from sqlalchemy import BigInteger, Float, Integer, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./thicket.db")
@@ -43,6 +43,7 @@ class Node(Base):
     pending_seed: Mapped[int] = mapped_column(BigInteger, default=0)
     last_challenge_at: Mapped[float] = mapped_column(Float, default=0.0)
     failed_challenges: Mapped[int] = mapped_column(Integer, default=0)
+    capabilities: Mapped[str] = mapped_column(String(120), default="")  # csv: text,vision
 
 
 class Counter(Base):
@@ -58,7 +59,9 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), default="text")      # text | vision
     prompt: Mapped[str] = mapped_column(String(2000), default="")
+    image: Mapped[str | None] = mapped_column(Text, nullable=True)      # base64, vision jobs
     payer: Mapped[str] = mapped_column(String(42), default="")
     payment_thkt: Mapped[float] = mapped_column(Float, default=0.0)  # THKT (wei overflows int8)
     payment_tx: Mapped[str] = mapped_column(String(80), default="")
@@ -68,8 +71,25 @@ class Job(Base):
     created_at: Mapped[float] = mapped_column(Float, default=0.0)
 
 
+# Columns added after the first deploy. create_all() only creates missing
+# *tables*, so add these by hand if an older database is already live.
+_ADDED = [
+    ("nodes", "capabilities", "VARCHAR(120) DEFAULT ''"),
+    ("jobs", "kind", "VARCHAR(20) DEFAULT 'text'"),
+    ("jobs", "image", "TEXT"),
+]
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table, column, ddl in _ADDED:
+            if not insp.has_table(table):
+                continue
+            existing = {c["name"] for c in insp.get_columns(table)}
+            if column not in existing:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
 
 
 def session_scope():

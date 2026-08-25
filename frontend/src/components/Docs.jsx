@@ -74,6 +74,12 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`}</div>
           <div className="code">{`.venv/bin/python -u -m thicket_node.client --key 0xYOUR_PRIVATE_KEY`}</div>
           <p>The node bonds itself on-chain, registers, and starts earning. Watch it live in the <a href="/app#dashboard">portal</a>. Press <code>Ctrl+C</code> to stop — your bond stays staked.</p>
 
+          <h3>Serve real AI jobs (optional)</h3>
+          <p>Uptime alone earns THKT. To also receive <strong>paid compute jobs</strong>, install <a href="https://ollama.com">Ollama</a> and pull a model. The node detects what you have and advertises only what it can actually run.</p>
+          <div className="code">{`ollama pull llama3.2:1b     # text jobs
+ollama pull llava:7b        # image -> text (captioning)`}</div>
+          <p>Restart the node and it prints what it can serve. Without Ollama it says so plainly and keeps earning from uptime — it just won't be handed jobs it can't do.</p>
+
           <h3>Three ways to give it your key</h3>
           <table className="docs-table">
             <thead><tr><th>Method</th><th>Command</th><th>Notes</th></tr></thead>
@@ -107,7 +113,12 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`}</div>
             <li>Approve and pay the price (default 10 THKT) — this funds the pool.</li>
             <li>A node picks up the job on its next heartbeat, runs it, and posts the result.</li>
           </ol>
-          <div className="callout">Execution is a placeholder today (a deterministic transform); a real GPU model runtime plugs in on the node side. Payment is verified on-chain before a job runs.</div>
+          <p>Two kinds of job are supported today:</p>
+          <ul>
+            <li><strong>Text</strong> — send a prompt, get generated text back.</li>
+            <li><strong>Image → text</strong> — upload an image and ask about it (captioning, description).</li>
+          </ul>
+          <div className="callout">Jobs are only routed to nodes that advertise the matching capability, so a text-only node never receives vision work. Payment is verified on-chain before a job runs. Image <em>generation</em> needs a diffusion runtime and isn't supported yet.</div>
 
           <h2 id="claim">Claiming rewards</h2>
           <p>Earnings accrue live but become <strong>claimable</strong> only when an epoch settles — that's when the on-chain Merkle root updates. In the portal, "Earned" ticks up continuously while "Claimable" updates each epoch. Claimable is always <code>settled − already-claimed</code>, so it nets to zero right after you claim.</p>
