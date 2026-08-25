@@ -1,4 +1,4 @@
-import { ArrowUpRight, Github } from "lucide-react";
+import { ArrowUpRight, Github, Mail } from "lucide-react";
 
 // The real X wordmark — lucide's `X` is a close icon, not the brand.
 export const XLogo = ({ size = 16 }) => (
@@ -10,7 +10,7 @@ export const XLogo = ({ size = 16 }) => (
 const MARK = "/logo-mark.png";
 const X_URL = "https://x.com/thicket_rh";
 const GITHUB = "https://github.com/Thicketrh-xyz/Thicket";
-const SUPPORT = "mailto:thicketrobinhood@gmail.com";
+const SUPPORT = "mailto:thicket@thicket.xyz";
 
 export function SectionLabel({ children, light = false }) {
   return (
@@ -82,8 +82,12 @@ export function SiteFooter() {
         </div>
         <div>
           <span>COMMUNITY</span>
-          <a href={X_URL} target="_blank" rel="noreferrer">X / @thicket_rh</a>
-          <a href={SUPPORT}>Contact support</a>
+          <a className="footer__social" href={X_URL} target="_blank" rel="noreferrer">
+            <XLogo size={14} /> X / @thicket_rh
+          </a>
+          <a className="footer__social" href={SUPPORT}>
+            <Mail size={15} /> Contact support
+          </a>
         </div>
       </div>
       <div className="footer__legal">
