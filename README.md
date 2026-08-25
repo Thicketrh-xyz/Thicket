@@ -19,20 +19,53 @@ Lime-green circuit-tree on white (see the logo). Design tokens live in
 
 ## Run a node
 
-Live on Robinhood Chain testnet. You need a wallet with **≥1,000 THKT** (the operator bond)
-plus a little testnet ETH for gas.
+Any PC works — no GPU needed yet. You need a wallet holding **1,000 THKT** (the operator
+bond) plus a little testnet ETH for gas.
+
+**1. Get the code and install**
 
 ```bash
 git clone https://github.com/Thicketrh-xyz/Thicket.git
 cd Thicket/node
-cp .env.example .env            # set THICKET_PRIVATE_KEY=0x...  (coordinator URL + addresses are prefilled)
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -u -m thicket_node.client
 ```
 
-The node bonds itself on-chain, registers with the coordinator, and starts earning THKT per
-verified minute. Watch it live on the dashboard at **thicketrh.xyz**. (Already bonded
-from the web app's Stake tab? Set `SKIP_BOND=true` in `.env`.)
+**2. Need a wallet? Make one** (skip if you already have one)
+
+```bash
+.venv/bin/python -m thicket_node.client --new-wallet
+```
+
+Save the address and private key it prints, then send that address 1,000+ THKT and a little
+testnet ETH.
+
+**3. Start earning**
+
+```bash
+.venv/bin/python -u -m thicket_node.client --key 0xYOUR_PRIVATE_KEY
+```
+
+That's it. The node bonds itself on-chain, registers, and starts earning. Watch it live at
+[thicketrh.xyz/app](https://thicketrh.xyz/app). Press `Ctrl+C` to stop — your bond stays staked.
+
+### Three ways to give it your key
+
+| | How | Notes |
+|---|---|---|
+| **Prompt** *(safest)* | `.venv/bin/python -u -m thicket_node.client` | Asks for the key; input stays hidden and isn't saved to shell history |
+| **Flag** *(quickest)* | `--key 0xYOUR_KEY` | Convenient, but the key lands in your shell history |
+| **File** *(persistent)* | `echo 'THICKET_PRIVATE_KEY=0xYOUR_KEY' >> .env` | Set once, then just run the client |
+
+### Handy flags
+
+```bash
+--new-wallet          # generate a wallet and exit
+--node-id my-rig      # name this node
+--bond 2000           # bond more than the minimum
+--skip-bond           # already bonded via the web app
+--interval 15         # seconds between heartbeats
+--help                # everything
+```
 
 ## How it works — the hybrid loop
 

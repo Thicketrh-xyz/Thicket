@@ -21,35 +21,33 @@ export function NodeGuide({ open, onClose }) {
           <div className="modal__step">
             <div className="n">1</div>
             <div>
-              <h4>Get a funded wallet</h4>
-              <p>You need at least <b>1,000 THKT</b> (the operator bond) plus a little testnet ETH for gas.</p>
+              <h4>Get the code and install</h4>
+              <div className="code">{`git clone https://github.com/Thicketrh-xyz/Thicket.git
+cd Thicket/node
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`}</div>
             </div>
           </div>
 
           <div className="modal__step">
             <div className="n">2</div>
             <div>
-              <h4>Get the code &amp; configure</h4>
-              <p>The coordinator URL and contract addresses are already filled in.</p>
-              <div className="code">{`git clone https://github.com/Thicketrh-xyz/Thicket.git
-cd Thicket/node
-cp .env.example .env
-#  → set THICKET_PRIVATE_KEY=0x...`}</div>
+              <h4>Need a wallet? Make one</h4>
+              <p>Then send it 1,000+ THKT (the bond) and a little testnet ETH for gas.</p>
+              <div className="code">{`.venv/bin/python -m thicket_node.client --new-wallet`}</div>
             </div>
           </div>
 
           <div className="modal__step">
             <div className="n">3</div>
             <div>
-              <h4>Run it</h4>
-              <p>The node bonds itself on-chain, registers, and starts earning.</p>
-              <div className="code">{`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -u -m thicket_node.client`}</div>
+              <h4>Start earning</h4>
+              <p>Bonds on-chain, registers, and starts earning. Ctrl+C to stop.</p>
+              <div className="code">{`.venv/bin/python -u -m thicket_node.client --key 0xYOUR_PRIVATE_KEY`}</div>
             </div>
           </div>
 
           <div className="note">
-            Already bonded from the Stake tab? Set <code>SKIP_BOND=true</code> in <code>.env</code>.
+            Prefer not to put the key in a command? Run it without <code>--key</code> and it will ask (hidden input). Already bonded from the Stake tab? Add <code>--skip-bond</code>.
             Earnings settle to an on-chain root each epoch, then you claim here.
             {!CONTRACTS_LIVE && " Contracts aren't wired in this build, so figures are illustrative."}
           </div>

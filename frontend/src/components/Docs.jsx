@@ -59,13 +59,38 @@ export function Docs() {
           <p>Rewards accrue off-chain and settle as one root per epoch, so per-minute earnings never require per-minute gas.</p>
 
           <h2 id="run-a-node">Run a node</h2>
-          <p>Any PC works — no GPU required at this stage. You need a wallet with <strong>≥ 1,000 THKT</strong> (the operator bond) plus a little testnet ETH for gas.</p>
+          <p>Any PC works — no GPU needed yet. You need a wallet holding <strong>1,000 THKT</strong> (the operator bond) plus a little testnet ETH for gas.</p>
+
+          <h3>1. Get the code and install</h3>
           <div className="code">{`git clone https://github.com/Thicketrh-xyz/Thicket.git
 cd Thicket/node
-cp .env.example .env          # set THICKET_PRIVATE_KEY=0x...
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -u -m thicket_node.client`}</div>
-          <p>The node bonds itself on-chain, registers with the coordinator, and starts earning. Watch it live in the <a href="/app#dashboard">portal</a>. Already bonded from the Stake tab? Set <code>SKIP_BOND=true</code>.</p>
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`}</div>
+
+          <h3>2. Need a wallet? Make one</h3>
+          <p>Skip this if you already have one. Save what it prints, then send that address 1,000+ THKT and a little testnet ETH.</p>
+          <div className="code">{`.venv/bin/python -m thicket_node.client --new-wallet`}</div>
+
+          <h3>3. Start earning</h3>
+          <div className="code">{`.venv/bin/python -u -m thicket_node.client --key 0xYOUR_PRIVATE_KEY`}</div>
+          <p>The node bonds itself on-chain, registers, and starts earning. Watch it live in the <a href="/app#dashboard">portal</a>. Press <code>Ctrl+C</code> to stop — your bond stays staked.</p>
+
+          <h3>Three ways to give it your key</h3>
+          <table className="docs-table">
+            <thead><tr><th>Method</th><th>Command</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td>Prompt <em>(safest)</em></td><td><code>… -m thicket_node.client</code></td><td>Asks for the key; input stays hidden and never touches shell history</td></tr>
+              <tr><td>Flag <em>(quickest)</em></td><td><code>--key 0xYOUR_KEY</code></td><td>Convenient, but the key lands in your shell history</td></tr>
+              <tr><td>File <em>(persistent)</em></td><td><code>echo 'THICKET_PRIVATE_KEY=0x…' &gt;&gt; .env</code></td><td>Set once, then just run the client</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Handy flags</h3>
+          <div className="code">{`--new-wallet          # generate a wallet and exit
+--node-id my-rig      # name this node
+--bond 2000           # bond more than the minimum
+--skip-bond           # already bonded via the web app
+--interval 15         # seconds between heartbeats
+--help                # everything`}</div>
 
           <h2 id="staking">Staking &amp; delegation</h2>
           <p>Two ways to stake, both in the portal's <a href="/app#stake">Stake</a> tab:</p>

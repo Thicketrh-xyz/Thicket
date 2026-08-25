@@ -12,6 +12,9 @@ Run:
 """
 from __future__ import annotations
 
+import argparse
+import getpass
+import sys
 import time
 
 import requests
@@ -19,7 +22,7 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from .bond import ensure_bonded
-from .config import config
+from .config import Config
 from .work import run_job, solve_challenge
 
 
@@ -81,17 +84,84 @@ class ThicketNode:
                           json={"address": self.address, "challenge_id": challenge["id"],
                                 "output_hash": output_hash}, timeout=120)
         ok = r.ok and r.json().get("ok")
+        ok = r.ok and r.json().get("ok")
         print(f"[thicket] challenge {'passed' if ok else 'FAILED'}")
 
 
+def _normalise_key(k: str) -> str:
+    """Accept a key with or without the 0x prefix, and strip stray quotes."""
+    k = (k or "").strip().strip('"').strip("'")
+    if k and not k.startswith("0x"):
+        k = "0x" + k
+    return k
+
+
+def _new_wallet() -> None:
+    acct = Account.create()
+    key = acct.key.hex()
+    if not key.startswith("0x"):
+        key = "0x" + key
+    print()
+    print("New wallet created - save these somewhere safe:")
+    print()
+    print(f"  Address     : {acct.address}")
+    print(f"  Private key : {key}")
+    print()
+    print("Fund it with THKT (for the bond) plus a little testnet ETH (for gas), then run:")
+    print("  python -m thicket_node.client --key <YOUR_PRIVATE_KEY>")
+    print()
+
+
 def main() -> None:
-    if not config.private_key:
-        raise SystemExit(
-            "No wallet key. Set THICKET_PRIVATE_KEY in node/.env (see node/.env.example).\n"
-            "Generate one with:  python -c \"from eth_account import Account; a=Account.create(); "
-            "print(a.address, a.key.hex())\""
-        )
-    ThicketNode(config).run()
+    p = argparse.ArgumentParser(
+        prog="thicket-node",
+        description="Run a Thicket node: bond THKT, stay online, pass challenges, earn.",
+    )
+    p.add_argument("--key", "-k", help="wallet private key (or set THICKET_PRIVATE_KEY / node/.env)")
+    p.add_argument("--node-id", help="a name for this node (default: node-1)")
+    p.add_argument("--coordinator", dest="coordinator_url", help="coordinator URL")
+    p.add_argument("--bond", dest="bond_amount", help="THKT to bond (default: contract minimum)")
+    p.add_argument("--skip-bond", action="store_true", help="skip on-chain bonding (already bonded)")
+    p.add_argument("--interval", type=int, dest="heartbeat_interval", help="seconds between heartbeats")
+    p.add_argument("--new-wallet", action="store_true", help="generate a fresh wallet and exit")
+    args = p.parse_args()
+
+    if args.new_wallet:
+        _new_wallet()
+        return
+
+    cfg = Config.load(
+        private_key=_normalise_key(args.key) if args.key else "",
+        node_id=args.node_id,
+        coordinator_url=args.coordinator_url,
+        bond_amount=args.bond_amount,
+        skip_bond=args.skip_bond,
+        heartbeat_interval=args.heartbeat_interval,
+    )
+
+    # Still no key? Ask for it (hidden input) instead of dying with an error.
+    if not cfg.private_key:
+        if not sys.stdin.isatty():
+            raise SystemExit(
+                "No wallet key.\n"
+                "  Pass one:      python -m thicket_node.client --key 0xYOUR_KEY\n"
+                "  Or save it:    echo 'THICKET_PRIVATE_KEY=0xYOUR_KEY' >> .env\n"
+                "  No wallet yet: python -m thicket_node.client --new-wallet"
+            )
+        print("No wallet key found. Paste it below (input stays hidden),")
+        print("or just press Enter to generate a new wallet.")
+        print()
+        entered = getpass.getpass("Private key: ").strip()
+        if not entered:
+            _new_wallet()
+            return
+        cfg.private_key = _normalise_key(entered)
+
+    try:
+        ThicketNode(cfg).run()
+    except KeyboardInterrupt:
+        print()
+        print("[thicket] stopped. Your bond stays staked - run again to keep earning.")
 
 
 if __name__ == "__main__":

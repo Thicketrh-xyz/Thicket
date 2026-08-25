@@ -1,41 +1,63 @@
 """
-Node configuration, loaded from node/.env (or real environment variables).
+Node configuration.
 
-Copy node/.env.example to node/.env and set at least THICKET_PRIVATE_KEY.
+Values are resolved in this order (first wins):
+  1. command-line flags   (--key, --node-id, ...)
+  2. environment variables / node/.env
+  3. built-in defaults (already pointed at the live Thicket network)
 """
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()  # loads node/.env when run from the node/ dir (or a parent)
+    load_dotenv()  # picks up node/.env when present
 except ImportError:
-    pass  # dotenv optional; real env vars still work
+    pass  # dotenv is optional; plain env vars still work
 
 
-def _bool(v: str | None) -> bool:
-    return (v or "").strip().lower() in ("1", "true", "yes", "on")
+def _bool(v) -> bool:
+    return str(v or "").strip().lower() in ("1", "true", "yes", "on")
 
 
 @dataclass
 class Config:
-    private_key: str = os.getenv("THICKET_PRIVATE_KEY", "")
-    node_id: str = os.getenv("NODE_ID", "node-1")
-    coordinator_url: str = os.getenv("COORDINATOR_URL", "http://localhost:8000")
-    heartbeat_interval: int = int(os.getenv("HEARTBEAT_INTERVAL", "30"))
+    private_key: str = ""
+    node_id: str = "node-1"
+    coordinator_url: str = "https://thicket-production.up.railway.app"
+    heartbeat_interval: int = 30
 
-    # on-chain bonding (leave addresses blank to skip on-chain bonding)
-    rpc_url: str = os.getenv("ROBINHOOD_RPC", "https://rpc.testnet.chain.robinhood.com/rpc")
-    token_address: str = os.getenv("TOKEN_ADDRESS", "")
-    staking_address: str = os.getenv("STAKING_ADDRESS", "")
-    bond_amount: str = os.getenv("BOND_AMOUNT", "")   # human THKT; blank => contract minimum
-    skip_bond: bool = _bool(os.getenv("SKIP_BOND"))    # true when coordinator is in DRY mode
+    # on-chain bonding (blank addresses => bonding skipped)
+    rpc_url: str = "https://rpc.testnet.chain.robinhood.com/rpc"
+    token_address: str = "0x4D4837ddb309a8dCeC3Abe727dbfED584771aEE2"
+    staking_address: str = "0x434A64884B7C373eE145f11Ac9b7393723Ee5059"
+    bond_amount: str = ""      # human THKT; blank => the contract minimum
+    skip_bond: bool = False
+
+    @classmethod
+    def load(cls, **overrides) -> "Config":
+        """Env first, then any non-empty CLI overrides on top."""
+        cfg = cls(
+            private_key=os.getenv("THICKET_PRIVATE_KEY", ""),
+            node_id=os.getenv("NODE_ID", "node-1"),
+            coordinator_url=os.getenv("COORDINATOR_URL", cls.coordinator_url),
+            heartbeat_interval=int(os.getenv("HEARTBEAT_INTERVAL", "30")),
+            rpc_url=os.getenv("ROBINHOOD_RPC", cls.rpc_url),
+            token_address=os.getenv("TOKEN_ADDRESS", cls.token_address),
+            staking_address=os.getenv("STAKING_ADDRESS", cls.staking_address),
+            bond_amount=os.getenv("BOND_AMOUNT", ""),
+            skip_bond=_bool(os.getenv("SKIP_BOND")),
+        )
+        for k, v in overrides.items():
+            if v not in (None, "", False) and hasattr(cfg, k):
+                setattr(cfg, k, v)
+        return cfg
 
     @property
     def bonding_configured(self) -> bool:
         return bool(self.rpc_url and self.token_address and self.staking_address)
 
 
-config = Config()
+config = Config.load()   # convenience singleton for simple imports
