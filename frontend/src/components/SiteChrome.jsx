@@ -10,7 +10,7 @@ export const XLogo = ({ size = 16 }) => (
 const MARK = "/logo-mark.png";
 const X_URL = "https://x.com/thicket_rh";
 const GITHUB = "https://github.com/Thicketrh-xyz/Thicket";
-const SUPPORT = "mailto:thicket@thicket.xyz";
+const SUPPORT = "mailto:thicket@thicketrh.xyz";
 
 export function SectionLabel({ children, light = false }) {
   return (
@@ -82,8 +82,8 @@ export function SiteFooter() {
         </div>
         <div>
           <span>COMMUNITY</span>
-          <a className="footer__social" href={X_URL} target="_blank" rel="noreferrer">
-            <XLogo size={14} /> X / @thicket_rh
+          <a className="footer__x" href={X_URL} target="_blank" rel="noreferrer" aria-label="Thicket on X">
+            <XLogo size={20} />
           </a>
           <a className="footer__social" href={SUPPORT}>
             <Mail size={15} /> Contact support

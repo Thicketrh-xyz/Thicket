@@ -170,3 +170,13 @@ h1 em, h2 em { color: var(--moss); font-style: normal; }
 .footer__social { display: inline-flex; align-items: center; gap: 9px; }
 .footer__social svg { flex: none; opacity: .75; transition: opacity .18s var(--ease-out); }
 .footer__social:hover svg { opacity: 1; }
+
+/* footer X: logo only, bolder (footer is dark) */
+.footer__x { display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; margin-bottom: 10px; border-radius: 11px;
+  border: 1px solid var(--line-light); color: var(--canvas);
+  transition: color .18s var(--ease-out), border-color .18s var(--ease-out),
+              background .18s var(--ease-out), transform .18s var(--ease-out); }
+.footer__x svg { opacity: 1; }
+.footer__x:hover { color: var(--forest); border-color: var(--lime);
+  background: var(--lime); transform: translateY(-2px); }
