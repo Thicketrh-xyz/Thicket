@@ -18,8 +18,27 @@ except ImportError:
     pass  # dotenv is optional; plain env vars still work
 
 
+def _clean(v) -> str:
+    """Env values can pick up an inline comment when the value is empty
+    (dotenv keeps `KEY=   # note` as the comment text). Strip that, and any
+    surrounding whitespace/quotes, so a stray note never becomes a value."""
+    v = str(v or "").strip().strip('"').strip("'")
+    if v.startswith("#"):
+        return ""
+    return v.split("  #")[0].strip()
+
+
 def _bool(v) -> bool:
-    return str(v or "").strip().lower() in ("1", "true", "yes", "on")
+    return _clean(v).lower() in ("1", "true", "yes", "on")
+
+
+def _amount(v) -> str:
+    """Only keep a bond amount that's actually a number."""
+    v = _clean(v)
+    try:
+        return v if v and float(v) > 0 else ""
+    except ValueError:
+        return ""
 
 
 @dataclass
@@ -40,14 +59,14 @@ class Config:
     def load(cls, **overrides) -> "Config":
         """Env first, then any non-empty CLI overrides on top."""
         cfg = cls(
-            private_key=os.getenv("THICKET_PRIVATE_KEY", ""),
-            node_id=os.getenv("NODE_ID", "node-1"),
-            coordinator_url=os.getenv("COORDINATOR_URL", cls.coordinator_url),
-            heartbeat_interval=int(os.getenv("HEARTBEAT_INTERVAL", "30")),
-            rpc_url=os.getenv("ROBINHOOD_RPC", cls.rpc_url),
-            token_address=os.getenv("TOKEN_ADDRESS", cls.token_address),
-            staking_address=os.getenv("STAKING_ADDRESS", cls.staking_address),
-            bond_amount=os.getenv("BOND_AMOUNT", ""),
+            private_key=_clean(os.getenv("THICKET_PRIVATE_KEY")),
+            node_id=_clean(os.getenv("NODE_ID")) or "node-1",
+            coordinator_url=_clean(os.getenv("COORDINATOR_URL")) or cls.coordinator_url,
+            heartbeat_interval=int(_clean(os.getenv("HEARTBEAT_INTERVAL")) or 30),
+            rpc_url=_clean(os.getenv("ROBINHOOD_RPC")) or cls.rpc_url,
+            token_address=_clean(os.getenv("TOKEN_ADDRESS")) or cls.token_address,
+            staking_address=_clean(os.getenv("STAKING_ADDRESS")) or cls.staking_address,
+            bond_amount=_amount(os.getenv("BOND_AMOUNT")),
             skip_bond=_bool(os.getenv("SKIP_BOND")),
         )
         for k, v in overrides.items():
