@@ -1,6 +1,6 @@
 import { ArrowUpRight, Github, X } from "lucide-react";
 
-const MARK = "/manus-storage/thicket-mark_b88e5196.png";
+const MARK = "/logo.png";
 const X_URL = "https://x.com/thicket_rh";
 const GITHUB = "https://github.com/Thicketrh-xyz/Thicket";
 const SUPPORT = "mailto:thicketrobinhood@gmail.com";
