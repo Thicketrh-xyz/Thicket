@@ -507,9 +507,11 @@ def maybe_spot_check(db: Session, job: Job) -> Quorum | None:
 
 @app.post("/jobs")
 def submit_job(req: JobReq, db: Session = Depends(get_db)):
-    """Record a paid job. Payment is the on-chain fund() into the rewards pool;
-    for the MVP we trust the client-provided tx (production would verify it on
-    chain). The job is then assigned to the next online node via heartbeat."""
+    """Record a paid job. Payment is the on-chain fund() into the rewards pool:
+    the tx receipt is fetched and its PoolFunded event matched against this payer
+    and the server-side price, so a client can't claim a payment it didn't make
+    or underpay for the job it's asking for. Only DRY mode trusts the client.
+    The job is then assigned to the next online node via heartbeat."""
     if req.kind not in ("text", "vision"):
         raise HTTPException(400, "kind must be 'text' or 'vision'")
     if req.kind == "text" and not req.prompt.strip():

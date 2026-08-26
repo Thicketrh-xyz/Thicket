@@ -153,6 +153,5 @@ the reproducible way.
   measured on one machine. Two nodes with different quantisations may sit below 0.72
   while both being honest — which shows up as `inconclusive`, so it fails safe, but it
   makes verification useless rather than wrong.
-- **Payment is still trusted at the coordinator** for job pricing; unchanged by this work.
 - **Collusion ceiling is unchanged.** An attacker controlling most of the network can
   outvote honest nodes. Random selection plus the bond is what makes that expensive.
