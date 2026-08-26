@@ -166,3 +166,30 @@
 
 .docs-pager__link strong { font-size: 1rem; }
 .docs-pager__link:hover strong { text-decoration: underline; }
+
+/* Docs navigation on small screens, where .docs-side is hidden. */
+.docs-mobile-nav { display: none; }
+
+@media (max-width: 980px) {
+  .docs-mobile-nav {
+    display: block;
+    margin: 18px 0 6px;
+    border: 1px solid var(--line, #e4e8e2);
+    border-radius: 10px;
+    padding: 0 14px;
+  }
+  .docs-mobile-nav > summary {
+    cursor: pointer;
+    padding: 12px 0;
+    font-weight: 600;
+    list-style: none;
+  }
+  .docs-mobile-nav > summary::-webkit-details-marker { display: none; }
+  .docs-mobile-nav > summary::after { content: " ▾"; opacity: .5; }
+  .docs-mobile-nav[open] > summary::after { content: " ▴"; }
+  .docs-mobile-nav[open] { padding-bottom: 12px; }
+  .docs-mobile-nav .docs-side__group { margin-top: 12px; }
+  .docs-mobile-nav a { display: block; padding: 6px 0; font-size: .95rem;
+    color: var(--muted-foreground); }
+  .docs-mobile-nav a.is-active { color: var(--foreground); font-weight: 600; }
+}

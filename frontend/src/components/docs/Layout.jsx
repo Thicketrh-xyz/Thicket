@@ -33,6 +33,23 @@ export function DocsLayout({ slug, children }) {
         </aside>
 
         <main className="docs-main">
+          {/* The sidebar is hidden under 980px. Without this, the only way
+              between pages on a phone is the prev/next pager — 13 taps to reach
+              the far end of the docs. <details> needs no JS to work. */}
+          <details className="docs-mobile-nav">
+            <summary>All pages</summary>
+            {PAGES.map((g) => (
+              <div key={g.group}>
+                <div className="docs-side__group">{g.group}</div>
+                {g.items.map(([s, label]) => (
+                  <a key={s} href={href(s)} className={s === slug ? "is-active" : undefined}>
+                    {label}
+                  </a>
+                ))}
+              </div>
+            ))}
+          </details>
+
           <SectionLabel>Documentation</SectionLabel>
           <h1>{title}</h1>
           <p className="lede">{blurb}</p>
