@@ -53,6 +53,20 @@ class Counter(Base):
     value: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
+class Batch(Base):
+    """One payment covering many work items, fanned out across the network."""
+    __tablename__ = "batches"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    payer: Mapped[str] = mapped_column(String(42), default="")
+    kind: Mapped[str] = mapped_column(String(20), default="text")
+    instruction: Mapped[str] = mapped_column(Text, default="")   # applied to every item
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    payment_thkt: Mapped[float] = mapped_column(Float, default=0.0)
+    payment_tx: Mapped[str] = mapped_column(String(80), default="")
+    created_at: Mapped[float] = mapped_column(Float, default=0.0)
+
+
 class Job(Base):
     """A paid compute job: buyer pays THKT (which refills the rewards pool), a
     node executes it, the buyer collects the result."""
@@ -69,6 +83,7 @@ class Job(Base):
     assigned_node: Mapped[str | None] = mapped_column(String(42), nullable=True)
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[float] = mapped_column(Float, default=0.0)
+    batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
 
 # Columns added after the first deploy. create_all() only creates missing
@@ -77,6 +92,7 @@ _ADDED = [
     ("nodes", "capabilities", "VARCHAR(120) DEFAULT ''"),
     ("jobs", "kind", "VARCHAR(20) DEFAULT 'text'"),
     ("jobs", "image", "TEXT"),
+    ("jobs", "batch_id", "VARCHAR(64)"),
 ]
 
 

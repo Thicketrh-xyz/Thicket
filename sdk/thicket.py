@@ -50,6 +50,24 @@ class ThicketError(RuntimeError):
 
 
 @dataclass
+class BatchResult:
+    id: str
+    total: int
+    done: int
+    failed: int
+    price_thkt: float
+    results: list           # [{id, status, prompt, result, node}]
+
+    @property
+    def ok(self) -> bool:
+        return self.failed == 0 and self.done == self.total
+
+    def outputs(self) -> list[str]:
+        """Just the text, in submission order."""
+        return [r.get("result") or "" for r in self.results]
+
+
+@dataclass
 class JobResult:
     id: str
     status: str          # done | failed | pending | assigned
@@ -106,6 +124,73 @@ class Thicket:
         """Run a text job. `document` is appended to the instruction."""
         full = f"{prompt.strip()}\n\n{document}" if document else prompt
         return self._execute("text", full, timeout=timeout, max_price=max_price)
+
+    def run_batch(self, instruction: str, items: list[str], kind: str = "text",
+                  timeout: int = 1800, max_price: float | None = None,
+                  on_progress=None) -> BatchResult:
+        """Run many items under one instruction, with a single payment.
+
+        The network fans the work out across every capable node, so a batch
+        finishes far faster than submitting items one at a time.
+
+            res = t.run_batch("Summarise this row", [row1, row2, ...])
+        """
+        if not items:
+            raise ThicketError("no items to run")
+
+        caps = self.capabilities()
+        if caps and kind not in caps:
+            raise ThicketError(f"no node online can run '{kind}' jobs (network serves: {caps})")
+
+        price = self.quote_batch(instruction, items, kind)
+        if max_price is not None and price > max_price:
+            raise ThicketError(f"batch would cost {price} THKT, above your max_price of {max_price}")
+        held = self.balance()
+        if held < price:
+            raise ThicketError(f"wallet holds {held:.2f} THKT but this batch costs {price} THKT")
+
+        tx = self._pay(price)
+        batch = self._post("/batches", {
+            "kind": kind, "instruction": instruction,
+            "items": [{"prompt": it} for it in items],
+            "payer": self.address, "payment_tx": tx, "payment_thkt": price,
+        })
+        return self._wait_batch(batch["id"], timeout, on_progress)
+
+    def quote_batch(self, instruction: str, items: list[str], kind: str = "text") -> float:
+        """Price a whole batch without submitting it."""
+        p = self._pricing()
+        total = 0.0
+        for it in items:
+            chars = len((f"{instruction.strip()}\n\n{it}" if instruction else it))
+            total += p["base_thkt"] + (chars / 1000.0) * p["per_1k_chars_thkt"]
+            if kind == "vision":
+                total += p["vision_thkt"]
+        return round(total, 2)
+
+    def _pricing(self) -> dict:
+        if not getattr(self, "_pricing_cache", None):
+            self._pricing_cache = self._get("/compute/price")
+        return self._pricing_cache
+
+    def _wait_batch(self, batch_id: str, timeout: int, on_progress=None) -> BatchResult:
+        deadline = time.time() + timeout
+        last = -1
+        while time.time() < deadline:
+            b = self._get(f"/batches/{batch_id}")
+            finished = b["done"] + b["failed"]
+            if on_progress and finished != last:
+                on_progress(finished, b["total"])
+                last = finished
+            if b.get("finished"):
+                return BatchResult(id=batch_id, total=b["total"], done=b["done"],
+                                   failed=b["failed"], price_thkt=b["price_thkt"],
+                                   results=b["results"])
+            time.sleep(3)
+        b = self._get(f"/batches/{batch_id}")
+        raise ThicketError(
+            f"batch {batch_id} unfinished after {timeout}s ({b['done']}/{b['total']} done) — "
+            f"it is paid for and still running; poll GET /batches/{batch_id}")
 
     def caption(self, image: str | bytes, prompt: str = "Describe this image.",
                 timeout: int = 300, max_price: float | None = None) -> JobResult:

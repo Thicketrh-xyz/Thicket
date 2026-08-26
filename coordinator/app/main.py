@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from . import signing
 from .challenge import make_challenge, verify as verify_challenge
-from .db import Counter, Job, Node, SessionLocal, init_db
+from .db import Batch, Counter, Job, Node, SessionLocal, init_db
 from .epoch import EPOCH_SECONDS, REWARD_PER_MINUTE, chain_bridge, close_epoch, current_claims, start_scheduler
 
 app = FastAPI(title="Thicket Coordinator", version="0.3.0")
@@ -52,6 +52,8 @@ COMPUTE_VISION_THKT = float(os.getenv("COMPUTE_VISION_THKT", "4"))    # image ba
 COMPUTE_PER_MP_THKT = float(os.getenv("COMPUTE_PER_MP_THKT", "6"))    # per megapixel
 COMPUTE_PRICE_THKT = COMPUTE_BASE_THKT                                # legacy floor
 JOB_ASSIGN_TIMEOUT_S = int(os.getenv("JOB_ASSIGN_TIMEOUT_S", "180"))  # requeue if unfinished
+JOBS_PER_HEARTBEAT = int(os.getenv("JOBS_PER_HEARTBEAT", "4"))       # fan-out per node per beat
+MAX_BATCH_ITEMS = int(os.getenv("MAX_BATCH_ITEMS", "1000"))
 
 chain = chain_bridge()
 
@@ -174,25 +176,28 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
         j.status = "pending"
         j.assigned_node = None
 
-    # Hand this node a pending job it can actually run (capability-matched).
-    job_payload = None
+    # Hand this node work it can actually run (capability-matched). Several at a
+    # time, so a large batch drains in parallel instead of one item per beat.
+    job_payloads = []
     node_caps = {c for c in (node.capabilities or "").split(",") if c}
     if node_caps:
         pending = (db.query(Job)
                      .filter(Job.status == "pending", Job.kind.in_(node_caps))
-                     .order_by(Job.created_at).first())
-        if pending:
-            pending.status = "assigned"
-            pending.assigned_node = req.address
-            job_payload = {"id": pending.id, "kind": pending.kind,
-                           "prompt": pending.prompt, "image": pending.image}
+                     .order_by(Job.created_at)
+                     .limit(max(1, JOBS_PER_HEARTBEAT)).all())
+        for p in pending:
+            p.status = "assigned"
+            p.assigned_node = req.address
+            job_payloads.append({"id": p.id, "kind": p.kind,
+                                 "prompt": p.prompt, "image": p.image})
 
     db.commit()
     return {
         "ok": True,
         "minutes": round(node.contribution_minutes, 4),
         "challenge": challenge,
-        "job": job_payload,
+        "job": job_payloads[0] if job_payloads else None,   # older clients
+        "jobs": job_payloads,
     }
 
 
@@ -336,6 +341,94 @@ def get_job(jid: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "no such job")
     return {"id": job.id, "kind": job.kind, "status": job.status, "prompt": job.prompt,
             "result": job.result, "node": job.assigned_node}
+
+
+class BatchItem(BaseModel):
+    prompt: str = ""
+    image: str | None = None
+    image_pixels: int = 0
+
+
+class BatchReq(BaseModel):
+    kind: str = "text"
+    instruction: str = ""          # prepended to every item
+    items: list[BatchItem] = []
+    payer: str
+    payment_tx: str = ""
+    payment_thkt: float = 0.0
+
+
+@app.post("/batches")
+def submit_batch(req: BatchReq, db: Session = Depends(get_db)):
+    """One payment, many work items, fanned out across every capable node."""
+    if req.kind not in ("text", "vision"):
+        raise HTTPException(400, "kind must be 'text' or 'vision'")
+    if not req.items:
+        raise HTTPException(400, "no items")
+    if len(req.items) > MAX_BATCH_ITEMS:
+        raise HTTPException(400, f"too many items (max {MAX_BATCH_ITEMS})")
+
+    if req.payment_tx and db.query(Batch).filter(Batch.payment_tx == req.payment_tx).first():
+        raise HTTPException(400, "payment already used")
+
+    # Price every item, then require one payment covering the whole batch.
+    prompts = [f"{req.instruction.strip()}\n\n{it.prompt}".strip() if req.instruction else it.prompt
+               for it in req.items]
+    total = round(sum(quote_job(req.kind, p, bool(it.image), it.image_pixels)
+                      for p, it in zip(prompts, req.items)), 2)
+
+    if not chain.dry:
+        if req.payment_thkt + 1e-9 < total:
+            raise HTTPException(402, f"payment below batch price ({total} THKT)")
+        if not req.payment_tx or not chain.verify_payment(req.payment_tx, req.payer, total):
+            raise HTTPException(402, "payment not verified on-chain")
+
+    bid = secrets.token_hex(8)
+    now = time.time()
+    db.add(Batch(id=bid, payer=req.payer, kind=req.kind, instruction=req.instruction,
+                 total=len(req.items), payment_thkt=total, payment_tx=req.payment_tx,
+                 created_at=now))
+    for i, (p, it) in enumerate(zip(prompts, req.items)):
+        db.add(Job(id=f"{bid}-{i:04d}", kind=req.kind, prompt=p, image=it.image,
+                   payer=req.payer, payment_thkt=0.0, payment_tx=req.payment_tx,
+                   status="pending", created_at=now + i * 1e-6, batch_id=bid))
+    db.commit()
+    return {"id": bid, "items": len(req.items), "price_thkt": total}
+
+
+@app.get("/batches/{bid}")
+def get_batch(bid: str, db: Session = Depends(get_db)):
+    b = db.get(Batch, bid)
+    if not b:
+        raise HTTPException(404, "no such batch")
+    jobs = db.query(Job).filter(Job.batch_id == bid).order_by(Job.id).all()
+    counts = {"done": 0, "failed": 0, "pending": 0, "assigned": 0}
+    for j in jobs:
+        counts[j.status] = counts.get(j.status, 0) + 1
+    return {
+        "id": b.id, "kind": b.kind, "instruction": b.instruction,
+        "total": b.total, "price_thkt": b.payment_thkt, "created_at": b.created_at,
+        **counts,
+        "finished": counts["done"] + counts["failed"] >= b.total,
+        "results": [{"id": j.id, "status": j.status, "prompt": j.prompt,
+                     "result": j.result, "node": j.assigned_node} for j in jobs],
+    }
+
+
+@app.get("/batches")
+def list_batches(payer: str = "", limit: int = 20, db: Session = Depends(get_db)):
+    if not payer:
+        raise HTTPException(400, "payer required")
+    rows = (db.query(Batch).filter(func.lower(Batch.payer) == payer.lower())
+              .order_by(Batch.created_at.desc()).limit(min(limit, 100)).all())
+    out = []
+    for b in rows:
+        done = db.query(Job).filter(Job.batch_id == b.id, Job.status == "done").count()
+        failed = db.query(Job).filter(Job.batch_id == b.id, Job.status == "failed").count()
+        out.append({"id": b.id, "kind": b.kind, "total": b.total, "done": done,
+                    "failed": failed, "price_thkt": b.payment_thkt,
+                    "created_at": b.created_at, "instruction": b.instruction})
+    return out
 
 
 @app.get("/jobs")

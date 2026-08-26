@@ -45,6 +45,29 @@ res.price_thkt  # what it cost
 res.node        # which operator ran it
 ```
 
+## Bulk work
+
+One payment, many items, fanned out across every capable node — far faster than
+submitting one at a time.
+
+```python
+rows = [line for line in open("products.csv")][1:]
+
+res = t.run_batch(
+    "Summarise this row in five words",
+    rows,
+    on_progress=lambda done, total: print(f"{done}/{total}"),
+)
+
+print(res.done, "of", res.total, "completed")
+for text in res.outputs():
+    print(text)
+```
+
+`t.quote_batch(instruction, items)` prices the whole thing first. There's no bulk
+discount — the compute cost is the same — what you gain is a single payment and
+parallel execution.
+
 ## Guards
 
 Every job is checked before any THKT moves:

@@ -155,6 +155,21 @@ res.output      # the model's answer
 res.price_thkt  # what it cost
 res.node        # which operator ran it`}</div>
 
+          <h3>Bulk work</h3>
+          <p>One payment covering many items, fanned out across every capable node. A batch finishes far faster than submitting items one at a time — each node takes several at once rather than one per heartbeat.</p>
+          <div className="code">{`rows = [line for line in open("products.csv")][1:]
+
+res = t.run_batch(
+    "Summarise this row in five words",
+    rows,
+    on_progress=lambda done, total: print(f"{done}/{total}"),
+)
+
+print(res.done, "of", res.total, "completed")
+for text in res.outputs():
+    print(text)`}</div>
+          <p><code>t.quote_batch(instruction, items)</code> prices the whole batch before you commit. There's no bulk discount — the compute cost is the same — what you gain is a single payment and parallel execution.</p>
+
           <h3>Spending guards</h3>
           <p>Every job is checked <em>before</em> any THKT moves:</p>
           <table className="docs-table">
@@ -214,6 +229,8 @@ res.node        # which operator ran it`}</div>
               <tr><td><code>GET /compute/price</code></td><td>Price per compute job (THKT)</td></tr>
               <tr><td><code>POST /jobs</code></td><td>Submit a paid job (payment verified on-chain)</td></tr>
               <tr><td><code>GET /jobs/{`{id}`}</code></td><td>Poll a job's status and result</td></tr>
+              <tr><td><code>POST /batches</code></td><td>Submit many items under one payment</td></tr>
+              <tr><td><code>GET /batches/{`{id}`}</code></td><td>Batch progress and every result</td></tr>
             </tbody>
           </table>
 

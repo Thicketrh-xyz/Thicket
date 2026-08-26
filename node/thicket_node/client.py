@@ -76,8 +76,17 @@ class ThicketNode:
         print(f"[thicket] online — {data['minutes']:.2f} contribution minutes")
         if data.get("challenge"):
             self._handle_challenge(data["challenge"])
-        if data.get("job"):
-            self._handle_job(data["job"])
+
+        # The coordinator may hand over several jobs at once so a batch drains in
+        # parallel; older coordinators send a single "job".
+        jobs = data.get("jobs") or ([data["job"]] if data.get("job") else [])
+        if len(jobs) > 1:
+            print(f"[thicket] {len(jobs)} jobs assigned")
+        for job in jobs:
+            try:
+                self._handle_job(job)
+            except Exception as e:  # noqa: BLE001 — one bad job mustn't stop the rest
+                print(f"[thicket] job {job.get('id')} errored: {e}")
 
     def _handle_job(self, job: dict) -> None:
         print(f"[thicket] compute job {job['id']} ({job.get('kind', 'text')}) — running")
