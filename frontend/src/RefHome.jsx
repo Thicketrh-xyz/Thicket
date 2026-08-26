@@ -81,13 +81,13 @@ const verificationSteps = [
   {
     number: "03",
     title: "Pass challenges",
-    body: "Inference checks prove that the machine is doing real work.",
+    body: "Tasks are sent to three random nodes at once; the majority decides.",
     tag: "Verified",
   },
   {
     number: "04",
     title: "Claim THKT",
-    body: "Verified minutes settle through each epoch's Merkle root.",
+    body: "Minutes online and a share of completed work settle each epoch.",
     tag: "On-chain",
   },
 ];
@@ -101,12 +101,13 @@ const roadmap = [
   {
     state: "CURRENT",
     stage: "Sprout",
-    items: ["Coordinator + heartbeats", "Verifiable challenges", "Node client · testnet"],
+    items: ["Coordinator + heartbeats", "Verifiable challenges", "Model runtime · text + vision",
+            "Redundant verification", "Work-based rewards", "Node client · testnet"],
   },
   {
     state: "NEXT",
     stage: "Sapling",
-    items: ["Model runtime", "Redundant verification", "Desktop node app"],
+    items: ["Desktop node app", "Operator job policy", "Audit + mainnet economics"],
   },
   {
     state: "LATER",
@@ -279,7 +280,7 @@ export default function Home() {
           <div className="verification__copy">
             <SectionLabel light>VERIFICATION LOOP</SectionLabel>
             <h2>Uptime starts the clock. <em>Verified work</em> earns the reward.</h2>
-            <p>Thicket rewards availability, but only useful compute keeps earning. Every node moves through an observable four-stage loop.</p>
+            <p>Availability starts the earnings; completed jobs are what actually pay. Every node moves through an observable four-stage loop.</p>
             <div className="verification__steps">
               {verificationSteps.map((step) => (
                 <div className="verification-step" key={step.number}>

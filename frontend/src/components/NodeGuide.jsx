@@ -14,8 +14,9 @@ export function NodeGuide({ open, onClose }) {
         <div className="modal__body">
           <p className="panel__hint">
             A node is a small program you run on a machine with a GPU. It bonds THKT, passes
-            verification challenges, and earns per verified minute online. This site is the portal —
-            it can't run the node for you.
+            verification challenges, and earns two ways: per minute online, plus a share of what
+            buyers paid for the jobs it completes. This site is the portal — it can't run the node
+            for you.
           </p>
 
           <div className="modal__step">
@@ -40,14 +41,23 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`}</div>
           <div className="modal__step">
             <div className="n">3</div>
             <div>
+              <h4>Save your key once</h4>
+              <p>On macOS it goes in the Keychain — macOS asks for it directly, so it never lands in your shell history.</p>
+              <div className="code">{`.venv/bin/python -m thicket_node.client --save-key`}</div>
+            </div>
+          </div>
+
+          <div className="modal__step">
+            <div className="n">4</div>
+            <div>
               <h4>Start earning</h4>
               <p>Bonds on-chain, registers, and starts earning. Ctrl+C to stop.</p>
-              <div className="code">{`.venv/bin/python -u -m thicket_node.client --key 0xYOUR_PRIVATE_KEY`}</div>
+              <div className="code">{`.venv/bin/python -u -m thicket_node.client`}</div>
             </div>
           </div>
 
           <div className="note">
-            Prefer not to put the key in a command? Run it without <code>--key</code> and it will ask (hidden input). Already bonded from the Stake tab? Add <code>--skip-bond</code>.
+            Not on macOS? Run it without <code>--save-key</code> and it will ask for the key each time (hidden input), or put <code>THICKET_PRIVATE_KEY</code> in <code>node/.env</code> and <code>chmod 600</code> it. Already bonded from the Stake tab? Add <code>--skip-bond</code>.
             Earnings settle to an on-chain root each epoch, then you claim here.
             {!CONTRACTS_LIVE && " Contracts aren't wired in this build, so figures are illustrative."}
           </div>
