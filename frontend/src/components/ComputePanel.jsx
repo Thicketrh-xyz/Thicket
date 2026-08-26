@@ -48,6 +48,17 @@ export function ComputePanel({ session, notify }) {
     return () => { alive = false; clearInterval(id); };
   }, [session]);
 
+  function switchKind(next) {
+    if (next === kind) return;
+    setKind(next);
+    setPrompt("");
+    setImage(null);
+    setImageName("");
+    setFileName("");
+    setJob(null);
+    setStatus(null);
+  }
+
   // Same formula the coordinator uses; it re-checks authoritatively on submit.
   const price = Number((
     pricing.base_thkt +
@@ -103,8 +114,8 @@ export function ComputePanel({ session, notify }) {
       <div className="panel-grid">
         <div className="panel">
           <div className="tabs">
-            <button className={kind === "text" ? "is-active" : ""} onClick={() => setKind("text")}>Text</button>
-            <button className={kind === "vision" ? "is-active" : ""} onClick={() => setKind("vision")}>Image → text</button>
+            <button className={kind === "text" ? "is-active" : ""} onClick={() => switchKind("text")}>Text</button>
+            <button className={kind === "vision" ? "is-active" : ""} onClick={() => switchKind("vision")}>Image → text</button>
           </div>
 
           {kind === "vision" && (
