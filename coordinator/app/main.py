@@ -146,7 +146,8 @@ def stats(db: Session = Depends(get_db)):
         "tasks_executed": tasks.value if tasks else 0,         # cumulative challenges + jobs
         "jobs_running": jobs_running,                          # compute jobs in flight
         "verified_tasks": verified,                            # settled by k-node majority
-        "quorum_k": QUORUM_K,
+        "quorum_k": QUORUM_K,                                  # nodes per quorum
+        "spot_check_rate": qm.SPOT_CHECK_RATE,                 # share of paid work cross-checked
         "minutes_contributed": round(total_earned / REWARD_PER_MINUTE, 1),
         "thkt_earned": round(total_earned, 2),
         "pool_thkt": round(chain.pool_balance(), 2),           # rewards pool balance (on-chain)
