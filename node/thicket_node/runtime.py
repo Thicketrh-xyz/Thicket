@@ -28,6 +28,18 @@ TEXT_MODEL = os.getenv("THICKET_TEXT_MODEL", "llama3.2:1b")
 VISION_MODEL = os.getenv("THICKET_VISION_MODEL", "llava:7b")
 GEN_TIMEOUT = int(os.getenv("THICKET_JOB_TIMEOUT", "180"))
 
+# Ollama defaults num_ctx to 2048 no matter what the model supports, and silently
+# drops whatever doesn't fit. A 48,000-character document measured at 13,299
+# tokens was being read at 2,050 of them — 15% — while the buyer was billed for
+# all of it. So size the window to the input instead of accepting the default.
+#
+# The ceiling is an operator's memory limit, not a model limit: a larger window
+# costs RAM, so it stays configurable and a node with less memory can lower it.
+MAX_CTX = int(os.getenv("THICKET_MAX_CTX", "32768"))
+MIN_CTX = 2048
+CTX_OUTPUT_RESERVE = 1024      # room for the answer, not just the question
+CHARS_PER_TOKEN = 3.0          # deliberately low: over-reserving is harmless
+
 # Any locally-installed model whose name starts with one of these counts as
 # vision-capable. Everything else is treated as text-only.
 _VISION_HINTS = ("llava", "moondream", "bakllava", "llama3.2-vision", "minicpm-v", "qwen2-vision")
@@ -69,6 +81,22 @@ def detect_capabilities() -> dict:
     return {"caps": caps, "models": chosen, "runtime": "ollama"}
 
 
+def _fit_context(prompt: str) -> int:
+    """A context window big enough to actually read this input.
+
+    Rounded up to a power of two because that's how these runtimes like their
+    buffers, clamped to [MIN_CTX, MAX_CTX]. Input longer than MAX_CTX still gets
+    truncated — the coordinator refuses those jobs before payment, so a node
+    should never see one, but the clamp is here rather than an unbounded
+    allocation driven by whatever a buyer sent.
+    """
+    need = int(len(prompt or "") / CHARS_PER_TOKEN) + CTX_OUTPUT_RESERVE
+    ctx = MIN_CTX
+    while ctx < need and ctx < MAX_CTX:
+        ctx *= 2
+    return min(ctx, MAX_CTX)
+
+
 def _generate(model: str, prompt: str, images: list[str] | None = None,
               seed: int | None = None) -> str:
     # Sampling is pinned: greedy decoding plus the coordinator's per-job seed.
@@ -77,7 +105,7 @@ def _generate(model: str, prompt: str, images: list[str] | None = None,
     # seed) makes two honest nodes disagree wildly on the same prompt. A node is
     # never told which of its jobs are being checked, so every job is run the
     # reproducible way.
-    options = {"temperature": 0.0, "top_p": 1.0}
+    options = {"temperature": 0.0, "top_p": 1.0, "num_ctx": _fit_context(prompt)}
     if seed is not None:
         options["seed"] = int(seed)
     payload = {"model": model, "prompt": prompt, "stream": False, "options": options}

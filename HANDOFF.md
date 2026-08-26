@@ -55,18 +55,22 @@ Nodes   ──▶ node client ────────────────�
   (or recompute, below k nodes) + slashing
 - **Real AI jobs** via Ollama — text (`llama3.2:1b`) and vision (`llava:7b`), capability-routed
   so a node only gets work it can actually do
-- **Size-based pricing** — base + per-1k-chars + per-megapixel for images; quoted before payment,
-  re-priced server-side on submit
+- **Size-based pricing** — base + per-1k-chars; quoted before payment, re-priced server-side on
+  submit, and inputs too large for a node to read are refused before payment rather than truncated
 - **Bulk** — one payment, many items, fanned out (4 jobs per node per heartbeat); UI + SDK
 - **Agent SDK** with spend guards (no capable node / insufficient balance / over max_price)
 - Job history, failure reporting, orphaned-job requeue, `/debug/jobs`
 
 ## What's left, in priority order
 
-1. **Economics — supply side.** Buyers are charged by work done, but operators still earn a flat
-   **1 THKT/min** regardless of what they do. A node grinding a 1,000-item batch earns the same as
-   an idle one. *Do this next: time a real batch and a large document first — those numbers tell
-   you what the rate should be.*
+1. **Economics — supply side.** Measured: see `ECONOMICS.md`. A 12-item batch took 14.2s, the
+   buyer paid 62.39 THKT and the operator earned 0.237 THKT — *exactly* what an idle node earned
+   over the same seconds. Two pricing bugs the measurement exposed are now fixed (silent document
+   truncation, and per-megapixel pricing that charged 7.2x for identical work).
+   **Still to build:** rewards that track work done. The unit is tokens weighted by kind —
+   output costs ~20x input on this hardware — not minutes and not input characters. The node
+   already gets exact token counts back from Ollama; nothing stores them yet. Keep a small
+   non-zero uptime component so a node is worth running before demand exists.
 2. ~~**Job verification.**~~ **Built** — see `VERIFICATION.md`. k-node quorum (k=3), 10%
    spot-check on paid work, majority settlement wired to the existing strike/slash path,
    recompute fallback when fewer than k nodes are online. `coordinator/sim.py` covers it.

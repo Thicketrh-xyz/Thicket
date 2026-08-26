@@ -116,18 +116,31 @@ smallest honest step is:
 Keeping a floor on uptime matters: rewards that are *purely* per-task make an idle network
 worthless to join, and Thicket needs nodes online and bonded before demand exists.
 
-## Fix these first, regardless of the reward redesign
+## Findings 1 and 2 are fixed
 
-Findings 1 and 2 are live defects affecting buyers on the network today:
+Both were live defects affecting buyers, and neither depended on the reward redesign.
 
-- **Truncation** — set `num_ctx` explicitly to fit the input (bounded by a documented
-  maximum), or reject/split documents that exceed it. Silently binning 85% of a paid
-  document is the most serious thing in this file.
-- **Per-megapixel pricing** — either drop the term for llava-class models, or make it
-  conditional on a model that genuinely tiles by resolution. Charging 7× for identical
-  work is not defensible.
+**Truncation.** Nodes now size the context window to the input
+(`runtime.py::_fit_context`): a power-of-two ladder from 2048 up to `THICKET_MAX_CTX`
+(32,768 by default), with room reserved for the answer. The ceiling is an operator's
+memory limit, not a model limit, so it stays configurable.
 
-Neither depends on the reward work, and both are small.
+Verified on the same 48,000-character document: **2,050 → 13,299 input tokens**, the whole
+thing read, at the predicted cost (9.2 s → 24.0 s).
+
+Beyond that ceiling the coordinator now **refuses the job before taking payment**
+(`check_size`, HTTP 413, default limit 95,000 characters — roughly 32k tokens). Accepting
+money for a document we would bin most of was the failure worth closing; `/compute/quote`
+reports `too_large` instead of raising, so a UI can warn while someone is still typing.
+
+**Per-megapixel pricing.** `COMPUTE_PER_MP_THKT` now defaults to **0**. Measured, a
+0.02 MP and a 9.44 MP image both cost 589 input tokens and the same wall time, and both
+now quote **9.02 THKT** (previously 9.12 vs 65.60). The knob survives because it *is* the
+right model for a tiling encoder — set it if the network ever runs one.
+
+Keep `COMPUTE_MAX_CHARS` on the coordinator in step with `THICKET_MAX_CTX` on the nodes:
+the coordinator promises what the nodes can deliver, and nothing enforces that across the
+two processes.
 
 ## Reproducing
 

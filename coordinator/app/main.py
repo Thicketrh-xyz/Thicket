@@ -51,11 +51,22 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 COMPUTE_BASE_THKT = float(os.getenv("COMPUTE_BASE_THKT", "5"))        # per-job overhead
 COMPUTE_PER_1K_CHARS = float(os.getenv("COMPUTE_PER_1K_CHARS", "2"))  # input size
 COMPUTE_VISION_THKT = float(os.getenv("COMPUTE_VISION_THKT", "4"))    # image base
-COMPUTE_PER_MP_THKT = float(os.getenv("COMPUTE_PER_MP_THKT", "6"))    # per megapixel
+# Measured, not assumed: llava resizes every image to a fixed 336x336 grid, so
+# 0.02MP and 9.44MP both cost exactly 589 input tokens and the same wall time.
+# Charging per megapixel billed a 7.2x price range for identical work, so the
+# term defaults to 0. It stays configurable because it *is* the right model for
+# a tiling encoder (GPT-4V, Qwen2-VL) — set it if the network runs one.
+COMPUTE_PER_MP_THKT = float(os.getenv("COMPUTE_PER_MP_THKT", "0"))    # per megapixel
 COMPUTE_PRICE_THKT = COMPUTE_BASE_THKT                                # legacy floor
 JOB_ASSIGN_TIMEOUT_S = int(os.getenv("JOB_ASSIGN_TIMEOUT_S", "180"))  # requeue if unfinished
 JOBS_PER_HEARTBEAT = int(os.getenv("JOBS_PER_HEARTBEAT", "4"))       # fan-out per node per beat
 MAX_BATCH_ITEMS = int(os.getenv("MAX_BATCH_ITEMS", "1000"))
+# The largest input a node can actually read. Nodes size their context window to
+# the job (node/thicket_node/runtime.py::_fit_context) up to THICKET_MAX_CTX
+# tokens; beyond that the tail would be silently dropped. Refusing the job is the
+# honest response — taking payment for a document we'd bin 85% of is not. Keep
+# this in step with the nodes' THICKET_MAX_CTX (32768 tokens ~ 95k chars).
+MAX_PROMPT_CHARS = int(os.getenv("COMPUTE_MAX_CHARS", "95000"))
 # --- verification ----------------------------------------------------------
 # A sampled share of paid work runs on k nodes at once and is settled by
 # majority (see quorum.py). Buyers are charged the normal single price for a
@@ -438,6 +449,19 @@ class JobResultReq(BaseModel):
     ok: bool = True
 
 
+def check_size(prompt: str, where: str = "prompt") -> None:
+    """Refuse input longer than a node can actually read.
+
+    This runs before the payment check on purpose. The alternative — accept the
+    money, hand the node a document it will silently truncate, and return a
+    summary of the first fraction of it — is the failure this exists to prevent.
+    """
+    n = len(prompt or "")
+    if n > MAX_PROMPT_CHARS:
+        raise HTTPException(413, f"{where} is {n:,} characters; the limit is "
+                                 f"{MAX_PROMPT_CHARS:,}. Split it into a bulk batch.")
+
+
 def quote_job(kind: str, prompt: str, has_image: bool, image_pixels: int = 0) -> float:
     """What this job should cost, in THKT.
 
@@ -468,6 +492,7 @@ def compute_price():
         "per_1k_chars_thkt": COMPUTE_PER_1K_CHARS,
         "vision_thkt": COMPUTE_VISION_THKT,
         "per_mp_thkt": COMPUTE_PER_MP_THKT,
+        "max_chars": MAX_PROMPT_CHARS,            # longer inputs are refused
     }
 
 
@@ -480,8 +505,14 @@ class QuoteReq(BaseModel):
 
 @app.post("/compute/quote")
 def compute_quote(req: QuoteReq):
+    # A quote is advisory, so an oversized prompt is reported rather than
+    # refused — the UI can warn while someone is still typing. /jobs is where it
+    # actually gets rejected.
+    chars = len(req.prompt or "")
     return {"price_thkt": quote_job(req.kind, req.prompt, req.has_image, req.image_pixels),
-            "chars": len(req.prompt or ""),
+            "chars": chars,
+            "max_chars": MAX_PROMPT_CHARS,
+            "too_large": chars > MAX_PROMPT_CHARS,
             "megapixels": round(req.image_pixels / 1_000_000.0, 2)}
 
 
@@ -518,6 +549,7 @@ def submit_job(req: JobReq, db: Session = Depends(get_db)):
         raise HTTPException(400, "empty prompt")
     if req.kind == "vision" and not req.image:
         raise HTTPException(400, "vision jobs need an image")
+    check_size(req.prompt)
 
     # No reusing one payment for multiple jobs.
     if req.payment_tx and db.query(Job).filter(Job.payment_tx == req.payment_tx).first():
@@ -589,6 +621,8 @@ def submit_batch(req: BatchReq, db: Session = Depends(get_db)):
     # Price every item, then require one payment covering the whole batch.
     prompts = [f"{req.instruction.strip()}\n\n{it.prompt}".strip() if req.instruction else it.prompt
                for it in req.items]
+    for i, p in enumerate(prompts):
+        check_size(p, where=f"item {i + 1}")
     total = round(sum(quote_job(req.kind, p, bool(it.image), it.image_pixels)
                       for p, it in zip(prompts, req.items)), 2)
 

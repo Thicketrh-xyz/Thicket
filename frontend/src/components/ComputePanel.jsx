@@ -22,7 +22,7 @@ export function ComputePanel({ session, notify }) {
   const [imagePixels, setImagePixels] = useState(0);
   const [rawItems, setRawItems] = useState("");        // bulk: one item per line
   const [itemsName, setItemsName] = useState("");
-  const [pricing, setPricing] = useState({ base_thkt: 5, per_1k_chars_thkt: 2, vision_thkt: 4, per_mp_thkt: 6 });
+  const [pricing, setPricing] = useState({ base_thkt: 5, per_1k_chars_thkt: 2, vision_thkt: 4, per_mp_thkt: 0 });
   const [pool, setPool] = useState(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
@@ -267,7 +267,8 @@ export function ComputePanel({ session, notify }) {
           </div>
           <p className="hint" style={{ marginTop: 6, marginBottom: 14 }}>
             {pricing.base_thkt} base + {pricing.per_1k_chars_thkt}/1k chars
-            {mode === "vision" ? ` + ${pricing.vision_thkt} image + ${pricing.per_mp_thkt}/megapixel` : ""}
+            {mode === "vision" ? ` + ${pricing.vision_thkt} image` : ""}
+            {mode === "vision" && pricing.per_mp_thkt > 0 ? ` + ${pricing.per_mp_thkt}/megapixel` : ""}
             {mode === "bulk" ? " — charged per item, paid once" : ""}
             {doc ? " — includes the attached document" : ""}
           </p>
