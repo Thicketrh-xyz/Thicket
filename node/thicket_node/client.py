@@ -81,20 +81,16 @@ class ThicketNode:
 
     def _handle_job(self, job: dict) -> None:
         print(f"[thicket] compute job {job['id']} ({job.get('kind', 'text')}) — running")
-        result = run_job(job)
+        res = run_job(job)
+        ok = bool(res.get("ok")) if isinstance(res, dict) else True
+        output = res.get("output", "") if isinstance(res, dict) else str(res)
+        secs = res.get("seconds") if isinstance(res, dict) else None
         requests.post(f"{self.coordinator}/jobs/{job['id']}/result",
-                      json={"address": self.address, "result": result}, timeout=120)
-        print(f"[thicket] job {job['id']} done")
-
-    def _handle_challenge(self, challenge: dict) -> None:
-        print(f"[thicket] challenge {challenge['id']} — solving {challenge['type']}")
-        output_hash = solve_challenge(challenge)
-        r = requests.post(f"{self.coordinator}/challenge/result",
-                          json={"address": self.address, "challenge_id": challenge["id"],
-                                "output_hash": output_hash}, timeout=120)
-        ok = r.ok and r.json().get("ok")
-        ok = r.ok and r.json().get("ok")
-        print(f"[thicket] challenge {'passed' if ok else 'FAILED'}")
+                      json={"address": self.address, "result": output, "ok": ok}, timeout=120)
+        if ok:
+            print(f"[thicket] job {job['id']} done" + (f" in {secs}s" if secs else ""))
+        else:
+            print(f"[thicket] job {job['id']} FAILED — {output}")
 
 
 def _normalise_key(k: str) -> str:

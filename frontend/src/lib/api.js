@@ -50,6 +50,11 @@ export function fetchJob(id) {
   return get(`/jobs/${id}`);
 }
 
+// A buyer's own job history (results persist beyond the browser session).
+export function fetchMyJobs(payer) {
+  return get(`/jobs?payer=${payer}`);
+}
+
 // This account's claim (amount + Merkle proof) for the on-chain claim tx.
 export async function fetchClaimFor(address) {
   const claims = await fetchClaims();

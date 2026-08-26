@@ -6,6 +6,7 @@ import { Dashboard } from "./components/Dashboard";
 import { StakePanel } from "./components/StakePanel";
 import { NodeGuide } from "./components/NodeGuide";
 import { PortalStats } from "./components/PortalStats";
+import { JobHistory } from "./components/JobHistory";
 import { connect, hasWallet } from "./lib/chain";
 import { CONTRACTS_LIVE } from "./config";
 import "./ref-landing.css";
@@ -14,6 +15,7 @@ import "./app-docs.css";
 const NAV = [
   { href: "/", label: "Home" },
   { href: "#compute", label: "Compute" },
+  { href: "#jobs", label: "Jobs" },
   { href: "#dashboard", label: "Dashboard" },
   { href: "#stake", label: "Stake" },
   { href: "/docs", label: "Docs" },
@@ -74,6 +76,7 @@ export default function Portal() {
 
         <PortalStats />
         <ComputePanel session={session} notify={notify} />
+        <JobHistory session={session} />
         <Dashboard session={session} notify={notify} />
         <StakePanel session={session} notify={notify} />
       </div>

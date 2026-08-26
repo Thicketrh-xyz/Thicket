@@ -41,13 +41,10 @@ def run_job(job) -> str:
     if not caps["caps"]:
         # No model runtime on this machine. Be honest about it — never pretend
         # work happened. The node still earns from uptime + challenges.
-        return ("[thicket] no model runtime installed on this node. "
-                "Install Ollama and pull a model to serve real jobs.")
+        return {"ok": False, "output": "no model runtime installed on this node",
+                "model": None, "seconds": 0.0}
 
-    result = run_model(kind, prompt, image)
-    if not result["ok"]:
-        return f"[thicket] {result['output']}"
-    return result["output"]
+    return run_model(kind, prompt, image)   # {ok, output, model, seconds}
 
 
 def solve_challenge(challenge: dict) -> str:

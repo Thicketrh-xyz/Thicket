@@ -243,6 +243,7 @@ class JobReq(BaseModel):
 class JobResultReq(BaseModel):
     address: str
     result: str
+    ok: bool = True
 
 
 def quote_job(kind: str, prompt: str, has_image: bool) -> float:
@@ -321,14 +322,29 @@ def get_job(jid: str, db: Session = Depends(get_db)):
             "result": job.result, "node": job.assigned_node}
 
 
+@app.get("/jobs")
+def list_jobs(payer: str = "", limit: int = 25, db: Session = Depends(get_db)):
+    """A buyer's own job history, newest first."""
+    if not payer:
+        raise HTTPException(400, "payer required")
+    rows = (db.query(Job)
+              .filter(func.lower(Job.payer) == payer.lower())
+              .order_by(Job.created_at.desc())
+              .limit(min(limit, 100)).all())
+    return [{"id": j.id, "kind": j.kind, "status": j.status, "prompt": j.prompt,
+             "result": j.result, "node": j.assigned_node,
+             "price_thkt": j.payment_thkt, "created_at": j.created_at} for j in rows]
+
+
 @app.post("/jobs/{jid}/result")
 def job_result(jid: str, req: JobResultReq, db: Session = Depends(get_db)):
     job = db.get(Job, jid)
     if not job or job.assigned_node != req.address:
         raise HTTPException(400, "not your job")
     job.result = req.result or ""
-    job.status = "done"
-    bump_tasks(db)
+    job.status = "done" if req.ok else "failed"
+    if req.ok:
+        bump_tasks(db)          # only successful work counts as a task executed
     db.commit()
     return {"ok": True}
 
