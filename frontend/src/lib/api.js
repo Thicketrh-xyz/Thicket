@@ -46,6 +46,29 @@ export async function submitJob(prompt, payer, paymentTx, paymentThkt, kind = "t
   }
 }
 
+// --- bulk: one payment, many items ---
+export async function submitBatch(kind, instruction, items, payer, paymentTx, paymentThkt) {
+  try {
+    const r = await fetch(`${config.coordinatorBase}/batches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind, instruction, payer,
+        items: items.map((prompt) => ({ prompt })),
+        payment_tx: paymentTx, payment_thkt: paymentThkt,
+      }),
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+export function fetchBatch(id) {
+  return get(`/batches/${id}`);
+}
+
 export function fetchJob(id) {
   return get(`/jobs/${id}`);
 }
