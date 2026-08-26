@@ -101,6 +101,15 @@ class ThicketNode:
         else:
             print(f"[thicket] job {job['id']} FAILED — {output}")
 
+    def _handle_challenge(self, challenge: dict) -> None:
+        print(f"[thicket] challenge {challenge['id']} — solving {challenge['type']}")
+        output_hash = solve_challenge(challenge)
+        r = requests.post(f"{self.coordinator}/challenge/result",
+                          json={"address": self.address, "challenge_id": challenge["id"],
+                                "output_hash": output_hash}, timeout=120)
+        ok = r.ok and r.json().get("ok")
+        print(f"[thicket] challenge {'passed' if ok else 'FAILED'}")
+
 
 def _normalise_key(k: str) -> str:
     """Accept a key with or without the 0x prefix, and strip stray quotes."""
