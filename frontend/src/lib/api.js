@@ -32,12 +32,12 @@ export function fetchComputePrice() {
   return get("/compute/price");
 }
 
-export async function submitJob(prompt, payer, paymentTx, paymentThkt, kind = "text", image = null) {
+export async function submitJob(prompt, payer, paymentTx, paymentThkt, kind = "text", image = null, imagePixels = 0) {
   try {
     const r = await fetch(`${config.coordinatorBase}/jobs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, payer, payment_tx: paymentTx, payment_thkt: paymentThkt, kind, image }),
+      body: JSON.stringify({ prompt, payer, payment_tx: paymentTx, payment_thkt: paymentThkt, kind, image, image_pixels: imagePixels }),
     });
     if (!r.ok) return null;
     return await r.json();

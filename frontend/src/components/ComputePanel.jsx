@@ -16,7 +16,8 @@ export function ComputePanel({ session, notify }) {
   const [doc, setDoc] = useState(null);                // { text, name, chars }
   const [image, setImage] = useState(null);            // base64, no data: prefix
   const [imageName, setImageName] = useState("");
-  const [pricing, setPricing] = useState({ base_thkt: 5, per_1k_chars_thkt: 2, vision_thkt: 10 });
+  const [imagePixels, setImagePixels] = useState(0);
+  const [pricing, setPricing] = useState({ base_thkt: 5, per_1k_chars_thkt: 2, vision_thkt: 4, per_mp_thkt: 6 });
   const [pool, setPool] = useState(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
@@ -53,7 +54,7 @@ export function ComputePanel({ session, notify }) {
     if (next === kind) return;
     setKind(next);
     setPrompt(""); setDoc(null);
-    setImage(null); setImageName("");
+    setImage(null); setImageName(""); setImagePixels(0);
     setJob(null); setStatus(null);
   }
 
@@ -66,7 +67,9 @@ export function ComputePanel({ session, notify }) {
   const price = Number((
     pricing.base_thkt +
     (fullPrompt.length / 1000) * pricing.per_1k_chars_thkt +
-    (kind === "vision" ? pricing.vision_thkt : 0)
+    (kind === "vision"
+      ? pricing.vision_thkt + (imagePixels / 1_000_000) * pricing.per_mp_thkt
+      : 0)
   ).toFixed(2));
 
   async function run() {
@@ -84,7 +87,7 @@ export function ComputePanel({ session, notify }) {
       setBusy(true);
       const tx = await payForCompute(session.signer, price, (text) => setStatus({ text }));
       setStatus({ text: "Submitting job…", hash: tx });
-      const j = await submitJob(fullPrompt, session.address, tx, price, kind, image);
+      const j = await submitJob(fullPrompt, session.address, tx, price, kind, image, imagePixels);
       if (!j?.id) throw new Error("Job submission failed");
 
       setStatus({ text: "Waiting for a node…", hash: tx });
@@ -137,9 +140,10 @@ export function ComputePanel({ session, notify }) {
                 try {
                   const out = await prepareImage(f);   // normalise format + size
                   setImage(out.base64);
+                  setImagePixels(out.width * out.height);
                   setImageName(`${f.name} — ${out.width}×${out.height}, ${(out.bytes / 1024).toFixed(0)}KB`);
                 } catch (err) {
-                  setImage(null); setImageName(""); e.target.value = "";
+                  setImage(null); setImageName(""); setImagePixels(0); e.target.value = "";
                   notify(err.message || "Could not read that image.");
                 }
               }} />
@@ -204,8 +208,10 @@ export function ComputePanel({ session, notify }) {
           </div>
           <p className="hint" style={{ marginTop: 6, marginBottom: 14 }}>
             {pricing.base_thkt} base + {pricing.per_1k_chars_thkt}/1k chars
-            {kind === "vision" ? ` + ${pricing.vision_thkt} image` : ""}
+            {kind === "vision" ? ` + ${pricing.vision_thkt} image + ${pricing.per_mp_thkt}/megapixel` : ""}
             {doc ? " — includes the attached document" : ""}
+            {kind === "vision" && imagePixels
+              ? ` (${(imagePixels / 1_000_000).toFixed(2)} MP)` : ""}
           </p>
 
           <button className="button button--primary" onClick={run}

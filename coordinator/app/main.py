@@ -48,7 +48,8 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 # and a 50-page document are not the same job. Buyers are quoted before paying.
 COMPUTE_BASE_THKT = float(os.getenv("COMPUTE_BASE_THKT", "5"))        # per-job overhead
 COMPUTE_PER_1K_CHARS = float(os.getenv("COMPUTE_PER_1K_CHARS", "2"))  # input size
-COMPUTE_VISION_THKT = float(os.getenv("COMPUTE_VISION_THKT", "10"))   # image surcharge
+COMPUTE_VISION_THKT = float(os.getenv("COMPUTE_VISION_THKT", "4"))    # image base
+COMPUTE_PER_MP_THKT = float(os.getenv("COMPUTE_PER_MP_THKT", "6"))    # per megapixel
 COMPUTE_PRICE_THKT = COMPUTE_BASE_THKT                                # legacy floor
 JOB_ASSIGN_TIMEOUT_S = int(os.getenv("JOB_ASSIGN_TIMEOUT_S", "180"))  # requeue if unfinished
 
@@ -236,6 +237,7 @@ class JobReq(BaseModel):
     payer: str
     kind: str = "text"          # text | vision
     image: str | None = None    # base64 (vision jobs)
+    image_pixels: int = 0       # width*height, for resolution-based pricing
     payment_tx: str = ""       # the fund() tx that paid into the pool
     payment_thkt: float = 0.0
 
@@ -246,12 +248,23 @@ class JobResultReq(BaseModel):
     ok: bool = True
 
 
-def quote_job(kind: str, prompt: str, has_image: bool) -> float:
-    """What this specific job should cost, in THKT."""
+def quote_job(kind: str, prompt: str, has_image: bool, image_pixels: int = 0) -> float:
+    """What this job should cost, in THKT.
+
+    Text is priced per character — that's what the model actually reads, and it
+    tracks file size for plain text while correctly ignoring, say, a 5MB PDF that
+    is mostly pictures and yields little text.
+
+    Images are priced per megapixel: vision models turn an image into tokens in
+    proportion to its resolution, so a full photo genuinely costs a node more
+    than a thumbnail.
+    """
     price = COMPUTE_BASE_THKT
     price += (len(prompt or "") / 1000.0) * COMPUTE_PER_1K_CHARS
     if kind == "vision" or has_image:
         price += COMPUTE_VISION_THKT
+        mp = max(0.0, image_pixels) / 1_000_000.0
+        price += mp * COMPUTE_PER_MP_THKT
     return round(price, 2)
 
 
@@ -264,6 +277,7 @@ def compute_price():
         "base_thkt": COMPUTE_BASE_THKT,
         "per_1k_chars_thkt": COMPUTE_PER_1K_CHARS,
         "vision_thkt": COMPUTE_VISION_THKT,
+        "per_mp_thkt": COMPUTE_PER_MP_THKT,
     }
 
 
@@ -271,12 +285,14 @@ class QuoteReq(BaseModel):
     kind: str = "text"
     prompt: str = ""
     has_image: bool = False
+    image_pixels: int = 0
 
 
 @app.post("/compute/quote")
 def compute_quote(req: QuoteReq):
-    return {"price_thkt": quote_job(req.kind, req.prompt, req.has_image),
-            "chars": len(req.prompt or "")}
+    return {"price_thkt": quote_job(req.kind, req.prompt, req.has_image, req.image_pixels),
+            "chars": len(req.prompt or ""),
+            "megapixels": round(req.image_pixels / 1_000_000.0, 2)}
 
 
 @app.post("/jobs")
@@ -296,7 +312,7 @@ def submit_job(req: JobReq, db: Session = Depends(get_db)):
         raise HTTPException(400, "payment already used")
 
     # Price this job by its actual size, then require the payment to cover it.
-    price = quote_job(req.kind, req.prompt, bool(req.image))
+    price = quote_job(req.kind, req.prompt, bool(req.image), req.image_pixels)
     if not chain.dry:
         if req.payment_thkt + 1e-9 < price:
             raise HTTPException(402, f"payment below price for this job ({price} THKT)")
