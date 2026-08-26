@@ -31,11 +31,12 @@ def run_job(job) -> str:
     from .runtime import run as run_model, detect_capabilities
 
     if isinstance(job, str):
-        kind, prompt, image = "text", job, None
+        kind, prompt, image, seed = "text", job, None, None
     else:
         kind = job.get("kind") or "text"
         prompt = job.get("prompt") or ""
         image = job.get("image")
+        seed = job.get("seed")          # shared across every node running this job
 
     caps = detect_capabilities()
     if not caps["caps"]:
@@ -44,7 +45,7 @@ def run_job(job) -> str:
         return {"ok": False, "output": "no model runtime installed on this node",
                 "model": None, "seconds": 0.0}
 
-    return run_model(kind, prompt, image)   # {ok, output, model, seconds}
+    return run_model(kind, prompt, image, seed)   # {ok, output, model, seconds}
 
 
 def solve_challenge(challenge: dict) -> str:

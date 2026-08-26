@@ -84,6 +84,42 @@ class Job(Base):
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[float] = mapped_column(Float, default=0.0)
     batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    quorum_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    seed: Mapped[int] = mapped_column(BigInteger, default=0)   # shared sampling seed
+
+
+class Quorum(Base):
+    """One task sent to k nodes so they can be checked against each other."""
+    __tablename__ = "quorums"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), default="challenge")  # challenge | job
+    ref: Mapped[str] = mapped_column(String(64), default="")            # job id, for job quorums
+    seed: Mapped[int] = mapped_column(BigInteger, default=0)            # challenge quorums
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    required: Mapped[int] = mapped_column(Integer, default=3)           # k
+    deadline: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[str] = mapped_column(String(20), default="open")     # open|settled|inconclusive
+    consensus: Mapped[str | None] = mapped_column(Text, nullable=True)  # the winning answer
+    created_at: Mapped[float] = mapped_column(Float, default=0.0)
+    settled_at: Mapped[float] = mapped_column(Float, default=0.0)
+
+
+class QuorumResult(Base):
+    """One node's slot in a quorum. Written empty when the node is selected, so
+    the row doubles as the assignment — a node only gets the task if a slot is
+    waiting for it. The id is quorum:address, which makes double-voting
+    impossible at the database level."""
+    __tablename__ = "quorum_results"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    quorum_id: Mapped[str] = mapped_column(String(64), index=True)
+    node_address: Mapped[str] = mapped_column(String(42), index=True)
+    output_hash: Mapped[str] = mapped_column(String(80), default="")
+    output: Mapped[str | None] = mapped_column(Text, nullable=True)   # job text, for the buyer
+    dispatched_at: Mapped[float] = mapped_column(Float, default=0.0)  # last handed to the node
+    submitted_at: Mapped[float] = mapped_column(Float, default=0.0)
+    verdict: Mapped[str] = mapped_column(String(12), default="pending")  # pending|agreed|disagreed
 
 
 # Columns added after the first deploy. create_all() only creates missing
@@ -93,6 +129,8 @@ _ADDED = [
     ("jobs", "kind", "VARCHAR(20) DEFAULT 'text'"),
     ("jobs", "image", "TEXT"),
     ("jobs", "batch_id", "VARCHAR(64)"),
+    ("jobs", "quorum_id", "VARCHAR(64)"),
+    ("jobs", "seed", "BIGINT DEFAULT 0"),
 ]
 
 

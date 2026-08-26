@@ -69,8 +69,18 @@ def detect_capabilities() -> dict:
     return {"caps": caps, "models": chosen, "runtime": "ollama"}
 
 
-def _generate(model: str, prompt: str, images: list[str] | None = None) -> str:
-    payload = {"model": model, "prompt": prompt, "stream": False}
+def _generate(model: str, prompt: str, images: list[str] | None = None,
+              seed: int | None = None) -> str:
+    # Sampling is pinned: greedy decoding plus the coordinator's per-job seed.
+    # The network cross-checks a sampled share of jobs by running them on several
+    # nodes and comparing answers, and default sampling (temperature 0.8, random
+    # seed) makes two honest nodes disagree wildly on the same prompt. A node is
+    # never told which of its jobs are being checked, so every job is run the
+    # reproducible way.
+    options = {"temperature": 0.0, "top_p": 1.0}
+    if seed is not None:
+        options["seed"] = int(seed)
+    payload = {"model": model, "prompt": prompt, "stream": False, "options": options}
     if images:
         payload["images"] = images          # base64, no data: prefix
     r = requests.post(f"{OLLAMA_URL}/api/generate", json=payload, timeout=GEN_TIMEOUT)
@@ -78,7 +88,8 @@ def _generate(model: str, prompt: str, images: list[str] | None = None) -> str:
     return (r.json().get("response") or "").strip()
 
 
-def run(kind: str, prompt: str, image_b64: str | None = None) -> dict:
+def run(kind: str, prompt: str, image_b64: str | None = None,
+        seed: int | None = None) -> dict:
     """Execute one job. Returns {ok, output, model, seconds} — never raises, so
     a bad job can't take the node down."""
     started = time.time()
@@ -93,9 +104,9 @@ def run(kind: str, prompt: str, image_b64: str | None = None) -> dict:
             if not image_b64:
                 return {"ok": False, "output": "vision job needs an image",
                         "model": model, "seconds": 0.0}
-            out = _generate(model, prompt or "Describe this image.", [image_b64])
+            out = _generate(model, prompt or "Describe this image.", [image_b64], seed)
         else:
-            out = _generate(model, prompt)
+            out = _generate(model, prompt, seed=seed)
         return {"ok": True, "output": out, "model": model,
                 "seconds": round(time.time() - started, 2)}
     except Exception as e:  # noqa: BLE001

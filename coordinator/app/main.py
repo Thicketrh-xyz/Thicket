@@ -21,10 +21,12 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from . import quorum as qm
 from . import signing
 from .challenge import make_challenge, verify as verify_challenge
-from .db import Batch, Counter, Job, Node, SessionLocal, init_db
-from .epoch import EPOCH_SECONDS, REWARD_PER_MINUTE, chain_bridge, close_epoch, current_claims, start_scheduler
+from .db import Batch, Counter, Job, Node, Quorum, QuorumResult, SessionLocal, init_db
+from .epoch import (EPOCH_SECONDS, REWARD_PER_MINUTE, chain_bridge, close_epoch,
+                    current_claims, schedule, start_scheduler)
 
 app = FastAPI(title="Thicket Coordinator", version="0.3.0")
 
@@ -54,14 +56,37 @@ COMPUTE_PRICE_THKT = COMPUTE_BASE_THKT                                # legacy f
 JOB_ASSIGN_TIMEOUT_S = int(os.getenv("JOB_ASSIGN_TIMEOUT_S", "180"))  # requeue if unfinished
 JOBS_PER_HEARTBEAT = int(os.getenv("JOBS_PER_HEARTBEAT", "4"))       # fan-out per node per beat
 MAX_BATCH_ITEMS = int(os.getenv("MAX_BATCH_ITEMS", "1000"))
+# --- verification ----------------------------------------------------------
+# A sampled share of paid work runs on k nodes at once and is settled by
+# majority (see quorum.py). Buyers are charged the normal single price for a
+# spot-checked job: operator rewards are uptime-based, so redundancy costs the
+# network compute but costs the pool nothing extra.
+QUORUM_K = qm.QUORUM_K
 
 chain = chain_bridge()
+
+
+def sweep_quorums() -> int:
+    """Settle quorums whose deadline has passed. Heartbeats do this too, but a
+    quorum whose selected nodes all went offline would otherwise sit open
+    forever and strand the buyer's job."""
+    settled = 0
+    db = SessionLocal()
+    try:
+        for q in qm.due_quorums(db):
+            settle_quorum(db, q)
+            settled += 1
+        db.commit()
+    finally:
+        db.close()
+    return settled
 
 
 @app.on_event("startup")
 def _startup():
     init_db()
     start_scheduler()
+    schedule(sweep_quorums, qm.QUORUM_DEADLINE_S, "sweep_quorums")
 
 
 def get_db():
@@ -113,12 +138,15 @@ def stats(db: Session = Depends(get_db)):
     online = sum(1 for n in nodes if n.last_heartbeat and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S)
     total_earned = sum(n.cumulative_reward + n.contribution_minutes * REWARD_PER_MINUTE for n in nodes)
     tasks = db.get(Counter, "tasks")
-    jobs_running = db.query(Job).filter(Job.status.in_(("pending", "assigned"))).count()
+    jobs_running = db.query(Job).filter(Job.status.in_(("pending", "assigned", "verifying"))).count()
+    verified = db.query(Quorum).filter(Quorum.status == "settled").count()
     return {
         "nodes": len(nodes),                                   # operators ever registered
         "active_nodes": online,                                # heartbeating right now
         "tasks_executed": tasks.value if tasks else 0,         # cumulative challenges + jobs
         "jobs_running": jobs_running,                          # compute jobs in flight
+        "verified_tasks": verified,                            # settled by k-node majority
+        "quorum_k": QUORUM_K,
         "minutes_contributed": round(total_earned / REWARD_PER_MINUTE, 1),
         "thkt_earned": round(total_earned, 2),
         "pool_thkt": round(chain.pool_balance(), 2),           # rewards pool balance (on-chain)
@@ -157,15 +185,59 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
     if node.last_heartbeat and (now - node.last_heartbeat) <= HEARTBEAT_TIMEOUT_S:
         node.contribution_minutes += (now - node.last_heartbeat) / 60.0
     node.last_heartbeat = now
+    # Flush before anything queries who's online: the session has autoflush off,
+    # so without this the node calling in still looks offline to its own quorum
+    # selection and can be left out of the quorum it just triggered.
+    db.flush()
 
+    # Settle any quorum whose deadline has passed. Cheap, and it means
+    # verification progresses on network activity alone.
+    for q in qm.due_quorums(db, now):
+        settle_quorum(db, q)
+
+    # A slot reserved for this node in an open quorum outranks a fresh solo
+    # challenge: k nodes are waiting on this answer.
     challenge = None
-    if now - node.last_challenge_at >= CHALLENGE_INTERVAL_S or node.last_challenge_at == 0:
-        seed = secrets.randbits(62)
-        ch = make_challenge(f"{req.address}:{int(now)}", seed=seed, size=CHALLENGE_SIZE)
-        node.pending_challenge_id = ch.challenge_id
-        node.pending_seed = seed
+    # Everything this node still owes an answer for, and the subset that should
+    # be (re-)sent on this beat. A node holding an unanswered slot is busy: it
+    # neither gets that task again straight away nor gets a new one.
+    outstanding = qm.slots_for(db, req.address)
+    slots = qm.due_for_dispatch(outstanding, JOB_ASSIGN_TIMEOUT_S)
+
+    def _challenge_quorum(rows):
+        for slot in rows:
+            q = db.get(Quorum, slot.quorum_id)
+            if q and q.kind == "challenge" and q.status == "open":
+                return q, slot
+        return None, None
+
+    open_challenge, open_challenge_slot = _challenge_quorum(slots)
+    awaiting_challenge, _ = _challenge_quorum(outstanding)
+
+    if open_challenge:
+        challenge = make_challenge(open_challenge.id, seed=open_challenge.seed,
+                                   size=open_challenge.size).to_dict()
+        qm.mark_dispatched(db, open_challenge_slot)
         node.last_challenge_at = now
-        challenge = ch.to_dict()
+    elif awaiting_challenge:
+        pass          # still working on one — don't stack another on top of it
+    elif now - node.last_challenge_at >= CHALLENGE_INTERVAL_S or node.last_challenge_at == 0:
+        seed = secrets.randbits(62)
+        # Prefer a k-node quorum. When too few nodes are online to form one,
+        # fall back to the coordinator recomputing it — that keeps a one-node
+        # network verified instead of halting verification altogether.
+        online = qm.eligible_nodes(db, now - HEARTBEAT_TIMEOUT_S)
+        q = qm.open_quorum(db, "challenge", seed=seed, size=CHALLENGE_SIZE,
+                           candidates=online, must_include=req.address)
+        if q:
+            challenge = make_challenge(q.id, seed=seed, size=CHALLENGE_SIZE).to_dict()
+            qm.mark_dispatched(db, qm.pending_slot(db, q.id, req.address))
+        else:
+            ch = make_challenge(f"{req.address}:{int(now)}", seed=seed, size=CHALLENGE_SIZE)
+            node.pending_challenge_id = ch.challenge_id
+            node.pending_seed = seed
+            challenge = ch.to_dict()
+        node.last_challenge_at = now
 
     # Requeue work orphaned by a node that took a job and never came back.
     stale_before = now - JOB_ASSIGN_TIMEOUT_S
@@ -180,16 +252,33 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
     # time, so a large batch drains in parallel instead of one item per beat.
     job_payloads = []
     node_caps = {c for c in (node.capabilities or "").split(",") if c}
-    if node_caps:
+    budget = max(1, JOBS_PER_HEARTBEAT)
+
+    # Work reserved for this node in a job quorum goes first — it has a deadline,
+    # and k-1 other nodes are already running it. The node is never told the task
+    # is being cross-checked, or who else has it.
+    for slot in slots:
+        if len(job_payloads) >= budget:
+            break
+        q = db.get(Quorum, slot.quorum_id)
+        if not q or q.kind != "job" or q.status != "open":
+            continue
+        j = db.get(Job, q.ref)
+        if j and j.kind in node_caps:
+            qm.mark_dispatched(db, slot)
+            job_payloads.append({"id": j.id, "kind": j.kind, "prompt": j.prompt,
+                                 "image": j.image, "seed": j.seed})
+
+    if node_caps and len(job_payloads) < budget:
         pending = (db.query(Job)
                      .filter(Job.status == "pending", Job.kind.in_(node_caps))
                      .order_by(Job.created_at)
-                     .limit(max(1, JOBS_PER_HEARTBEAT)).all())
+                     .limit(budget - len(job_payloads)).all())
         for p in pending:
             p.status = "assigned"
             p.assigned_node = req.address
-            job_payloads.append({"id": p.id, "kind": p.kind,
-                                 "prompt": p.prompt, "image": p.image})
+            job_payloads.append({"id": p.id, "kind": p.kind, "prompt": p.prompt,
+                                 "image": p.image, "seed": p.seed})
 
     db.commit()
     return {
@@ -201,20 +290,115 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
     }
 
 
+# --- verification settlement ------------------------------------------------
+
+def void_and_strike(db: Session, address: str, reason: str) -> int:
+    """One node got it wrong: void this window's earnings and count a strike.
+    Three strikes slashes the bond. Shared by the solo-challenge path and quorum
+    settlement so a liar is treated identically however it was caught."""
+    node = db.get(Node, address)
+    if not node:
+        return 0
+    node.failed_challenges += 1
+    node.contribution_minutes = 0.0
+    fails = node.failed_challenges
+    if fails >= MAX_FAILS_BEFORE_SLASH:
+        chain.slash(node.address, SLASH_AMOUNT_WEI, reason)
+        node.failed_challenges = 0
+    return fails
+
+
+def _on_agree(db: Session, address: str, q) -> None:
+    """Agreeing nodes keep everything they accrued, and the strike counter
+    resets — same as passing a solo challenge."""
+    node = db.get(Node, address)
+    if node:
+        node.failed_challenges = 0
+
+
+def _on_disagree(db: Session, address: str, q) -> None:
+    void_and_strike(db, address, "disagreed with quorum consensus")
+
+
+def settle_quorum(db: Session, q: Quorum) -> dict:
+    """Tally a quorum and apply the outcome. For job quorums the buyer's result
+    becomes the consensus answer — which is the real payoff of redundancy: the
+    buyer stops getting whatever the single fastest node happened to say."""
+    out = qm.settle(db, q, on_agree=_on_agree, on_disagree=_on_disagree)
+    if q.kind != "job":
+        return out
+
+    job = db.get(Job, q.ref)
+    if not job:
+        return out
+
+    if q.status == "settled":
+        job.result = q.consensus
+        job.status = "done"
+        job.assigned_node = out["agreed"][0] if out["agreed"] else None
+    else:
+        # No majority — punish nobody, but the buyer still needs an answer. Hand
+        # over the earliest one submitted and mark it unverified; the caller can
+        # see the quorum was inconclusive via /jobs/{id}.
+        rows = (db.query(QuorumResult)
+                  .filter(QuorumResult.quorum_id == q.id, QuorumResult.output_hash != "")
+                  .order_by(QuorumResult.submitted_at).all())
+        if rows:
+            job.result = rows[0].output
+            job.status = "done"
+            job.assigned_node = rows[0].node_address
+        else:
+            # Nobody answered at all — put it back in the ordinary queue rather
+            # than leaving the buyer with nothing.
+            job.quorum_id = None
+            job.status = "pending"
+            job.assigned_node = None
+    return out
+
+
+def verification_of(db: Session, job: Job) -> dict | None:
+    """How this job was checked, for the buyer."""
+    if not job.quorum_id:
+        return None
+    q = db.get(Quorum, job.quorum_id)
+    if not q:
+        return None
+    rows = db.query(QuorumResult).filter(QuorumResult.quorum_id == q.id).all()
+    return {
+        "quorum_id": q.id,
+        "status": q.status,                                   # open|settled|inconclusive
+        "verified": q.status == "settled",
+        "required": q.required,
+        "votes": sum(1 for r in rows if r.output_hash),
+        "agreed": sum(1 for r in rows if r.verdict == "agreed"),
+        "disagreed": sum(1 for r in rows if r.verdict == "disagreed"),
+    }
+
+
 @app.post("/challenge/result")
 def challenge_result(req: ChallengeResultReq, db: Session = Depends(get_db)):
+    # A quorum challenge is settled by what the other nodes say, not by the
+    # coordinator recomputing it.
+    q = db.get(Quorum, req.challenge_id)
+    if q and q.kind == "challenge":
+        if q.status != "open":
+            raise HTTPException(400, "quorum already settled")
+        if not qm.record_vote(db, q, req.address, req.output_hash):
+            raise HTTPException(400, "not your challenge")
+        bump_tasks(db)
+        result = settle_quorum(db, q) if qm.is_settleable(db, q) else None
+        db.commit()
+        # The node isn't told how the vote went — it doesn't know others have
+        # the same task, and its verdict may not exist yet.
+        return {"ok": True, "quorum": q.id, "settled": bool(result)}
+
     node = db.get(Node, req.address)
     if not node or node.pending_challenge_id != req.challenge_id:
         raise HTTPException(400, "no such challenge")
 
     ch = make_challenge(req.challenge_id, seed=node.pending_seed, size=CHALLENGE_SIZE)
     if not verify_challenge(ch, req.output_hash):
-        node.failed_challenges += 1
-        node.contribution_minutes = 0.0  # void this window's earnings
-        fails = node.failed_challenges
-        if fails >= MAX_FAILS_BEFORE_SLASH:
-            chain.slash(node.address, SLASH_AMOUNT_WEI, "repeated failed challenges")
-            node.failed_challenges = 0
+        fails = void_and_strike(db, node.address, "repeated failed challenges")
         db.commit()
         return {"ok": False, "reason": "wrong output", "fails": fails}
 
@@ -300,6 +484,26 @@ def compute_quote(req: QuoteReq):
             "megapixels": round(req.image_pixels / 1_000_000.0, 2)}
 
 
+def maybe_spot_check(db: Session, job: Job) -> Quorum | None:
+    """Roll the dice: a random share of paid work runs on k nodes instead of one.
+
+    Verifying everything at k=3 would triple network compute, so most jobs go
+    out unverified and a random sample is policed. A node can't tell which is
+    which, so cheating is a bet against a slashable bond.
+
+    Returns None (job runs normally) when the sample misses *or* when fewer than
+    k capable nodes are online to form a quorum.
+    """
+    if not qm.should_spot_check():
+        return None
+    candidates = qm.eligible_nodes(db, time.time() - HEARTBEAT_TIMEOUT_S, capability=job.kind)
+    q = qm.open_quorum(db, "job", ref=job.id, candidates=candidates)
+    if q:
+        job.quorum_id = q.id
+        job.status = "verifying"      # kept out of the ordinary single-node queue
+    return q
+
+
 @app.post("/jobs")
 def submit_job(req: JobReq, db: Session = Depends(get_db)):
     """Record a paid job. Payment is the on-chain fund() into the rewards pool;
@@ -325,13 +529,20 @@ def submit_job(req: JobReq, db: Session = Depends(get_db)):
             raise HTTPException(402, "payment not verified on-chain")
 
     jid = secrets.token_hex(8)
-    db.add(Job(
+    job = Job(
         id=jid, kind=req.kind, prompt=req.prompt, image=req.image, payer=req.payer,
         payment_thkt=req.payment_thkt, payment_tx=req.payment_tx,
         status="pending", created_at=time.time(),
-    ))
+        # Shared sampling seed: every node running this job draws the same way,
+        # so honest answers land close enough to be compared.
+        seed=secrets.randbits(31),
+    )
+    db.add(job)
+    db.flush()
+    q = maybe_spot_check(db, job)
     db.commit()
-    return {"id": jid, "status": "pending", "price_thkt": price}
+    return {"id": jid, "status": job.status, "price_thkt": price,
+            "verified": bool(q)}
 
 
 @app.get("/jobs/{jid}")
@@ -340,7 +551,8 @@ def get_job(jid: str, db: Session = Depends(get_db)):
     if not job:
         raise HTTPException(404, "no such job")
     return {"id": job.id, "kind": job.kind, "status": job.status, "prompt": job.prompt,
-            "result": job.result, "node": job.assigned_node}
+            "result": job.result, "node": job.assigned_node,
+            "verification": verification_of(db, job)}
 
 
 class BatchItem(BaseModel):
@@ -388,12 +600,19 @@ def submit_batch(req: BatchReq, db: Session = Depends(get_db)):
     db.add(Batch(id=bid, payer=req.payer, kind=req.kind, instruction=req.instruction,
                  total=len(req.items), payment_thkt=total, payment_tx=req.payment_tx,
                  created_at=now))
+    verified = 0
     for i, (p, it) in enumerate(zip(prompts, req.items)):
-        db.add(Job(id=f"{bid}-{i:04d}", kind=req.kind, prompt=p, image=it.image,
-                   payer=req.payer, payment_thkt=0.0, payment_tx=req.payment_tx,
-                   status="pending", created_at=now + i * 1e-6, batch_id=bid))
+        job = Job(id=f"{bid}-{i:04d}", kind=req.kind, prompt=p, image=it.image,
+                  payer=req.payer, payment_thkt=0.0, payment_tx=req.payment_tx,
+                  status="pending", created_at=now + i * 1e-6, batch_id=bid,
+                  seed=secrets.randbits(31))
+        db.add(job)
+        db.flush()
+        if maybe_spot_check(db, job):
+            verified += 1
     db.commit()
-    return {"id": bid, "items": len(req.items), "price_thkt": total}
+    return {"id": bid, "items": len(req.items), "price_thkt": total,
+            "spot_checked": verified}
 
 
 @app.get("/batches/{bid}")
@@ -402,7 +621,7 @@ def get_batch(bid: str, db: Session = Depends(get_db)):
     if not b:
         raise HTTPException(404, "no such batch")
     jobs = db.query(Job).filter(Job.batch_id == bid).order_by(Job.id).all()
-    counts = {"done": 0, "failed": 0, "pending": 0, "assigned": 0}
+    counts = {"done": 0, "failed": 0, "pending": 0, "assigned": 0, "verifying": 0}
     for j in jobs:
         counts[j.status] = counts.get(j.status, 0) + 1
     return {
@@ -411,7 +630,8 @@ def get_batch(bid: str, db: Session = Depends(get_db)):
         **counts,
         "finished": counts["done"] + counts["failed"] >= b.total,
         "results": [{"id": j.id, "status": j.status, "prompt": j.prompt,
-                     "result": j.result, "node": j.assigned_node} for j in jobs],
+                     "result": j.result, "node": j.assigned_node,
+                     "verification": verification_of(db, j)} for j in jobs],
     }
 
 
@@ -442,13 +662,42 @@ def list_jobs(payer: str = "", limit: int = 25, db: Session = Depends(get_db)):
               .limit(min(limit, 100)).all())
     return [{"id": j.id, "kind": j.kind, "status": j.status, "prompt": j.prompt,
              "result": j.result, "node": j.assigned_node,
-             "price_thkt": j.payment_thkt, "created_at": j.created_at} for j in rows]
+             "price_thkt": j.payment_thkt, "created_at": j.created_at,
+             "verification": verification_of(db, j)} for j in rows]
 
 
 @app.post("/jobs/{jid}/result")
 def job_result(jid: str, req: JobResultReq, db: Session = Depends(get_db)):
     job = db.get(Job, jid)
-    if not job or job.assigned_node != req.address:
+    if not job:
+        raise HTTPException(400, "not your job")
+
+    # Spot-checked job: this is one vote of k, not the answer.
+    if job.quorum_id:
+        q = db.get(Quorum, job.quorum_id)
+        if not q or q.status != "open":
+            raise HTTPException(400, "quorum already settled")
+        slot = qm.pending_slot(db, q.id, req.address)
+        if not slot:
+            raise HTTPException(400, "not your job")
+        if not req.ok:
+            # Inference broke on this node. That's a machine that fell over, not
+            # a liar — release the slot without a vote so it isn't struck for it.
+            # The quorum may now be decidable on the votes already in.
+            slot.verdict = "failed"
+            db.flush()
+            if qm.is_settleable(db, q):
+                settle_quorum(db, q)
+            db.commit()
+            return {"ok": True, "counted": False}
+        qm.record_vote(db, q, req.address, req.result or "")
+        bump_tasks(db)
+        if qm.is_settleable(db, q):
+            settle_quorum(db, q)
+        db.commit()
+        return {"ok": True, "counted": True}
+
+    if job.assigned_node != req.address:
         raise HTTPException(400, "not your job")
     job.result = req.result or ""
     job.status = "done" if req.ok else "failed"
@@ -456,6 +705,24 @@ def job_result(jid: str, req: JobResultReq, db: Session = Depends(get_db)):
         bump_tasks(db)          # only successful work counts as a task executed
     db.commit()
     return {"ok": True}
+
+
+@app.get("/quorums")
+def list_quorums(limit: int = 20, db: Session = Depends(get_db)):
+    """Recent quorums and how they landed — the audit trail for verification."""
+    rows = db.query(Quorum).order_by(Quorum.created_at.desc()).limit(min(limit, 100)).all()
+    out = []
+    for q in rows:
+        results = db.query(QuorumResult).filter(QuorumResult.quorum_id == q.id).all()
+        out.append({
+            "id": q.id, "kind": q.kind, "ref": q.ref, "status": q.status,
+            "required": q.required, "created_at": q.created_at,
+            "settled_at": q.settled_at,
+            "nodes": [{"address": r.node_address, "verdict": r.verdict,
+                       "hash": r.output_hash or None,
+                       "answered": bool(r.output_hash)} for r in results],
+        })
+    return out
 
 
 @app.get("/debug/jobs")

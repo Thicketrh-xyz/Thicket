@@ -48,8 +48,11 @@ Nodes   ──▶ node client ────────────────�
 
 ## What's built
 
+- **Redundant verification** — a sampled share of tasks runs on k=3 random nodes and is
+  settled by majority; disagreement voids earnings and strikes, 3 strikes slashes the bond
 - Fixed-supply **pool tokenomics** (launchpad-compatible; rewards transferred, never minted)
-- **Anti-sybil**: on-chain bond + EIP-191 signed heartbeats + recompute-verified challenges + slashing
+- **Anti-sybil**: on-chain bond + EIP-191 signed heartbeats + challenges verified by quorum
+  (or recompute, below k nodes) + slashing
 - **Real AI jobs** via Ollama — text (`llama3.2:1b`) and vision (`llava:7b`), capability-routed
   so a node only gets work it can actually do
 - **Size-based pricing** — base + per-1k-chars + per-megapixel for images; quoted before payment,
@@ -64,9 +67,11 @@ Nodes   ──▶ node client ────────────────�
    **1 THKT/min** regardless of what they do. A node grinding a 1,000-item batch earns the same as
    an idle one. *Do this next: time a real batch and a large document first — those numbers tell
    you what the rate should be.*
-2. **Job verification.** Nothing checks a node's output; it could take payment and return garbage.
-   Design already written in `VERIFICATION.md` (k-node quorum, majority vote, spot-checking).
-   This is what makes any "the work is verified" claim true — **don't publish that claim until it exists.**
+2. ~~**Job verification.**~~ **Built** — see `VERIFICATION.md`. k-node quorum (k=3), 10%
+   spot-check on paid work, majority settlement wired to the existing strike/slash path,
+   recompute fallback when fewer than k nodes are online. `coordinator/sim.py` covers it.
+   The claim you can now make is narrow and worth keeping narrow: *a sampled share of work
+   is cross-checked by three independent nodes*. Not "all work is verified".
 3. **Operators can't refuse jobs** — whatever a buyer sends runs on their machine.
 4. **Mainnet prerequisites** — audit, multisig on publisher/owner, legal review. The
    `RewardsDistributor` holds the pool and whoever controls the publisher key can drain it.
@@ -75,8 +80,13 @@ Nodes   ──▶ node client ────────────────�
 
 - The SDK's **paid** path (reads and guards verified; never completed a paid job)
 - A **real bulk run** on the live network
+- **Quorum with more than one real machine.** The logic is covered by `sim.py` and a single
+  real node was run end to end, but three separate machines have never voted on one task.
+  The similarity threshold (`QUORUM_JOB_THRESHOLD`, 0.72) was measured on one box, where
+  `temperature: 0` makes output byte-identical — it has never been tested against two
+  different GPUs or quantisations.
 
-Both need a funded wallet. Expect rough edges there first.
+All need a funded wallet or more hardware. Expect rough edges there first.
 
 ## Gotchas
 
@@ -96,6 +106,9 @@ Both need a funded wallet. Expect rough edges there first.
 ## Running things
 
 ```bash
+# verification scenarios (no server, no chain, no model)
+cd coordinator && .venv/bin/python -m sim
+
 # node
 cd node && .venv/bin/python -u -m thicket_node.client        # prompts for key
 ollama pull llama3.2:1b     # text jobs      (optional, but needed to serve work)
@@ -114,5 +127,6 @@ cd contracts && forge test
 ## Honest status
 
 Testnet, **unaudited**. THKT has no real value here. The "compute" is genuinely real now
-(actual models, actual output) but **output is unverified**, and the reward side of the economy
-is not yet tied to work done.
+(actual models, actual output). Output is **spot-checked, not verified**: 10% of paid work is
+cross-checked by three nodes and the other 90% is policed only by the risk of being sampled.
+The reward side of the economy is still not tied to work done.

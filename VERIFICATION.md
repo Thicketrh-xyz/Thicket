@@ -1,4 +1,9 @@
-# Redundant execution — design sketch
+# Redundant execution
+
+**Status: built.** Implemented in `coordinator/app/quorum.py`, wired through
+`/heartbeat`, `/challenge/result` and `/jobs/{id}/result`, and covered by nine
+scenarios in `coordinator/sim.py` (`.venv/bin/python -m sim`). The design below
+is what was built; decisions taken along the way are recorded at the bottom.
 
 How Thicket moves from *"the coordinator re-runs the task"* to *"several nodes agree on the
 answer"*. This is the verification layer that has to exist **before** a real GPU model can be
@@ -88,39 +93,66 @@ approach and the reason ZK is the eventual answer.
 **spot-checking**: run only a random `p%` of tasks redundantly (e.g. 10%), leaving the rest
 unverified but *probabilistically* policed. Cheating becomes a gamble against a slashable bond.
 
-## Making it survive the model swap
+## Keeping the comparison pluggable
 
-Keep the comparison **pluggable**. Today:
+Only *how two answers are compared* depends on the task. Quorum, tallying, strikes and
+slashing are identical either way, so `agree()` is selected per kind and everything else
+is shared. Tallying clusters mutually-agreeing votes rather than counting identical
+hashes — with a tolerance function "identical" isn't an equivalence relation, and a dict
+keyed on the answer would quietly stop working.
 
-```python
-def agree(a, b):            # exact hash equality
-    return a == b
-```
+## What was built
 
-Later, for non-deterministic model output:
+1. `Quorum` + `QuorumResult` tables and the tally logic — **done**
+2. Dispatch the same task to `k` nodes via heartbeat; recompute fallback when `online < k` — **done**
+3. Settlement: agreed / disagreed / inconclusive, on the existing strike + slash path — **done**
+4. Spot-check sampling (`p%`) — **done**, applied to single jobs and to every item in a batch
+5. Real models behind a tolerance `agree()` — **done** (see below)
 
-```python
-def agree(a, b):            # perceptual / numeric tolerance
-    return distance(a, b) < THRESHOLD
-```
+Knobs, all env-configurable: `QUORUM_K` (3), `QUORUM_SPOT_CHECK` (0.10),
+`QUORUM_DEADLINE_S` (300), `QUORUM_JOB_THRESHOLD` (0.72).
 
-Everything else — quorum, tallying, strikes, slashing — stays identical. That is the whole
-reason to build this **now, while the task is still cheap and deterministic**: the consensus
-machinery gets proven while mistakes are free, and the model swap becomes a one-function change
-behind a verification layer that already works.
+## Decisions taken
 
-## Suggested order
+- **`k = 3`, `p = 10%`** — one liar tolerated, ~1.2x overhead.
+- **Both challenges and paid jobs are verified.** A sampled share of paid work runs
+  on `k` nodes, and the buyer receives the answer the majority agreed on rather than
+  whatever the single fastest node happened to say.
+- **Buyers pay the normal 1x price for a spot-checked job.** Operator rewards are
+  uptime-based, so redundancy costs the network compute but costs the pool nothing
+  extra. This has to be revisited the moment rewards become per-task.
+- **All agreeing nodes keep their earnings.** With flat per-minute rewards there is no
+  per-task payout to split; in practice "paid" means agreeing nodes keep their
+  contribution minutes and disagreeing ones have that window voided.
+- **Settlement is early, not deadline-bound.** A quorum settles as soon as no further
+  vote can arrive — including when a selected node's inference crashed — so a buyer
+  never waits out the deadline for a vote that is never coming.
+- **Epoch settlement holds back nodes awaiting a verdict.** Voiding a liar's earnings
+  only works while they're unsettled, and a quorum can outlive several epochs. Anyone
+  with an open slot rolls over to the next epoch; honest nodes are paid one epoch later.
 
-1. `Quorum` + `QuorumResult` tables and the tally logic
-2. Dispatch the same task to `k` nodes via heartbeat; fall back to recompute when `online < k`
-3. Settlement: agreed / disagreed / inconclusive, wired to the existing strike + slash path
-4. Spot-check sampling (`p%`) to control cost
-5. *Then* swap `run_job()` for a real model, and relax `agree()` to a tolerance
+## Making it survive nondeterminism
 
-## Open questions (product decisions, not code)
+`agree()` is per-kind. Challenges compare hashes exactly. Job output compares by
+similarity (`difflib` ratio over case- and whitespace-normalised text), because two
+honest nodes do not emit identical bytes.
 
-- **`k` and `p`** — how much verification overhead is acceptable? (3 / 10% is a reasonable start)
-- **Do jobs get verified too, or only challenges?** Verifying paid jobs means a buyer's work is
-  done `k` times — someone has to pay for that.
-- **Reward split** — when `k` nodes do the same task, do all agreeing nodes get paid, or only one?
-  Paying all is fair but multiplies cost; paying one makes redundancy unpaid labour.
+The node also pins its sampling — `temperature: 0`, `top_p: 1`, plus a per-job seed
+the coordinator sends to every node running that job. Measured on one machine, this
+makes `llama3.2:1b` output byte-identical across runs, so the similarity threshold is
+headroom for cross-hardware drift (quantisation, GPU vs CPU) rather than the primary
+mechanism. A node is never told which of its jobs are being checked, so every job runs
+the reproducible way.
+
+## Still open
+
+- **A dropped-out node isn't replaced.** If a selected node's inference crashes, the
+  quorum settles on the remaining votes instead of drafting a substitute. Fine at
+  `k = 3` with `MIN_VOTES = 2`; worth revisiting if `k` grows.
+- **The similarity threshold is unvalidated across heterogeneous hardware.** It was
+  measured on one machine. Two nodes with different quantisations may sit below 0.72
+  while both being honest — which shows up as `inconclusive`, so it fails safe, but it
+  makes verification useless rather than wrong.
+- **Payment is still trusted at the coordinator** for job pricing; unchanged by this work.
+- **Collusion ceiling is unchanged.** An attacker controlling most of the network can
+  outvote honest nodes. Random selection plus the bond is what makes that expensive.
