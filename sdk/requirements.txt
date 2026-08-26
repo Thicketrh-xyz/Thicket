@@ -1,0 +1,3 @@
+web3>=6.15
+requests>=2.31
+pillow>=10.0     # optional: converts images to a format vision models accept

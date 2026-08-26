@@ -90,6 +90,23 @@ handed jobs it can't do.
 --help                # everything
 ```
 
+## Build on Thicket (agent SDK)
+
+Agents can't sign up for an API key — but they can hold a wallet. The SDK turns a
+job into one call: approve THKT, pay on-chain, submit, wait, return the result.
+
+```python
+from thicket import Thicket
+
+t = Thicket(private_key="0x...")
+print(t.quote("some text"))                 # price before committing
+print(t.run("Summarise this: ...").output)  # pay + run + result
+print(t.caption("chart.png").output)        # vision jobs too
+```
+
+It refuses before spending if no node can serve the job, the wallet is short, or the
+price exceeds a `max_price` you set. See [`sdk/`](sdk/).
+
 ## How it works — the hybrid loop
 
 ```
