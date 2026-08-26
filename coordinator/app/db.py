@@ -38,6 +38,9 @@ class Node(Base):
     node_id: Mapped[str] = mapped_column(String(128), default="")
     last_heartbeat: Mapped[float] = mapped_column(Float, default=0.0)       # epoch seconds
     contribution_minutes: Mapped[float] = mapped_column(Float, default=0.0)
+    work_thkt: Mapped[float] = mapped_column(Float, default=0.0)            # earned by work, this epoch
+    lifetime_minutes: Mapped[float] = mapped_column(Float, default=0.0)     # never reset, for stats
+    jobs_done: Mapped[int] = mapped_column(Integer, default=0)              # lifetime, for the dashboard
     cumulative_reward: Mapped[float] = mapped_column(Float, default=0.0)    # THKT owed all-time
     pending_challenge_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     pending_seed: Mapped[int] = mapped_column(BigInteger, default=0)
@@ -86,6 +89,10 @@ class Job(Base):
     batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     quorum_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     seed: Mapped[int] = mapped_column(BigInteger, default=0)   # shared sampling seed
+    # What this job is worth, priced server-side. payment_thkt is what the buyer
+    # sent (and is 0 on batch items, where one payment covers the whole batch),
+    # so operator rewards are derived from this instead.
+    price_thkt: Mapped[float] = mapped_column(Float, default=0.0)
 
 
 class Quorum(Base):
@@ -131,7 +138,25 @@ _ADDED = [
     ("jobs", "batch_id", "VARCHAR(64)"),
     ("jobs", "quorum_id", "VARCHAR(64)"),
     ("jobs", "seed", "BIGINT DEFAULT 0"),
+    ("jobs", "price_thkt", "DOUBLE PRECISION DEFAULT 0"),
+    ("nodes", "work_thkt", "DOUBLE PRECISION DEFAULT 0"),
+    ("nodes", "jobs_done", "INTEGER DEFAULT 0"),
+    ("nodes", "lifetime_minutes", "DOUBLE PRECISION DEFAULT 0"),
 ]
+
+
+# Run once, immediately after the named column is added, to seed it from data
+# that already exists. Skipped entirely on a fresh database.
+#
+# lifetime_minutes: /stats used to back-compute total minutes as
+# total_earned / REWARD_PER_MINUTE, which was correct only while rewards were
+# purely time-based. Now that work rewards land in the same total, minutes need
+# their own counter — and the historical value is recoverable exactly, because
+# up to this migration every THKT ever settled came from time online.
+_BACKFILL = {
+    ("nodes", "lifetime_minutes"):
+        "UPDATE nodes SET lifetime_minutes = cumulative_reward / {rate}",
+}
 
 
 # Columns whose type outgrew the original definition (VARCHAR -> TEXT).
@@ -148,6 +173,10 @@ def init_db() -> None:
             existing = {c["name"] for c in insp.get_columns(table)}
             if column not in existing:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+                seed = _BACKFILL.get((table, column))
+                if seed:
+                    rate = float(os.getenv("REWARD_PER_MINUTE", "1.0")) or 1.0
+                    conn.execute(text(seed.format(rate=rate)))
 
         # SQLite is dynamically typed and rejects this syntax; only Postgres needs it.
         if engine.dialect.name == "postgresql":

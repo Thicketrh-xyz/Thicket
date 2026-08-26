@@ -73,6 +73,26 @@ MAX_PROMPT_CHARS = int(os.getenv("COMPUTE_MAX_CHARS", "95000"))
 # spot-checked job: operator rewards are uptime-based, so redundancy costs the
 # network compute but costs the pool nothing extra.
 QUORUM_K = qm.QUORUM_K
+# --- operator rewards ------------------------------------------------------
+# Two components. Uptime pays for *availability* — a node has to be worth
+# running before any work arrives, so this can't be zero. Work pays a share of
+# what the buyer actually paid for that job.
+#
+# Revenue share rather than an independent per-work-unit rate, because the pool
+# is finite (350M, transferred not minted) and an independent rate is an
+# unbounded claim on it: emission would scale with demand and nothing caps it.
+# Tying the payout to money that actually came in makes the pool a subsidy
+# buffer instead of the source, and the economy closes.
+#
+# NOTE: REWARD_PER_MINUTE still defaults to 1.0 — deliberately unchanged, so no
+# operator earning today is suddenly worse off. At 1 THKT/min uptime dwarfs work
+# (60 THKT/hr against ~3.5 THKT for a typical job), so it needs lowering before
+# work rewards mean much. That's an economic decision, not a code one.
+OPERATOR_REVENUE_SHARE = float(os.getenv("OPERATOR_REVENUE_SHARE", "0.7"))
+# When k nodes agree on one job the buyer still paid once, so the operator share
+# is split between them rather than paid in full to each. Nodes are never told
+# which jobs are cross-checked, so there's nothing to dodge.
+QUORUM_SPLIT_REWARD = os.getenv("QUORUM_SPLIT_REWARD", "1").lower() not in ("0", "false", "no")
 
 chain = chain_bridge()
 
@@ -147,7 +167,12 @@ def stats(db: Session = Depends(get_db)):
     nodes = db.query(Node).all()
     now = time.time()
     online = sum(1 for n in nodes if n.last_heartbeat and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S)
-    total_earned = sum(n.cumulative_reward + n.contribution_minutes * REWARD_PER_MINUTE for n in nodes)
+    total_earned = sum(n.cumulative_reward + n.contribution_minutes * REWARD_PER_MINUTE
+                       + n.work_thkt for n in nodes)
+    # Track minutes directly. This used to be back-computed from total earnings,
+    # which was only ever right while earnings were purely time-based.
+    total_minutes = sum(n.lifetime_minutes for n in nodes)
+    total_jobs_done = sum(n.jobs_done for n in nodes)
     tasks = db.get(Counter, "tasks")
     jobs_running = db.query(Job).filter(Job.status.in_(("pending", "assigned", "verifying"))).count()
     verified = db.query(Quorum).filter(Quorum.status == "settled").count()
@@ -159,7 +184,9 @@ def stats(db: Session = Depends(get_db)):
         "verified_tasks": verified,                            # settled by k-node majority
         "quorum_k": QUORUM_K,                                  # nodes per quorum
         "spot_check_rate": qm.SPOT_CHECK_RATE,                 # share of paid work cross-checked
-        "minutes_contributed": round(total_earned / REWARD_PER_MINUTE, 1),
+        "minutes_contributed": round(total_minutes, 1),
+        "jobs_completed": total_jobs_done,
+        "revenue_share": OPERATOR_REVENUE_SHARE,
         "thkt_earned": round(total_earned, 2),
         "pool_thkt": round(chain.pool_balance(), 2),           # rewards pool balance (on-chain)
         "capabilities": sorted({c for n in nodes if n.last_heartbeat
@@ -195,7 +222,9 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
 
     now = time.time()
     if node.last_heartbeat and (now - node.last_heartbeat) <= HEARTBEAT_TIMEOUT_S:
-        node.contribution_minutes += (now - node.last_heartbeat) / 60.0
+        elapsed_min = (now - node.last_heartbeat) / 60.0
+        node.contribution_minutes += elapsed_min
+        node.lifetime_minutes += elapsed_min      # never voided, never reset
     node.last_heartbeat = now
     # Flush before anything queries who's online: the session has autoflush off,
     # so without this the node calling in still looks offline to its own quorum
@@ -304,6 +333,24 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
 
 # --- verification settlement ------------------------------------------------
 
+def credit_work(db: Session, address: str, thkt: float) -> None:
+    """Credit one node for work actually done.
+
+    Accrues alongside contribution_minutes and settles in the same epoch, so a
+    verdict that arrives late can still void it — see close_epoch's holdback.
+    """
+    node = db.get(Node, address)
+    if not node or thkt <= 0:
+        return
+    node.work_thkt += thkt
+    node.jobs_done += 1
+
+
+def operator_share(job: Job) -> float:
+    """The THKT an operator earns for completing this job."""
+    return max(0.0, job.price_thkt) * OPERATOR_REVENUE_SHARE
+
+
 def void_and_strike(db: Session, address: str, reason: str) -> int:
     """One node got it wrong: void this window's earnings and count a strike.
     Three strikes slashes the bond. Shared by the solo-challenge path and quorum
@@ -312,7 +359,10 @@ def void_and_strike(db: Session, address: str, reason: str) -> int:
     if not node:
         return 0
     node.failed_challenges += 1
+    # Void the whole unsettled window, not just the time part — leaving work
+    # earnings behind would make a strike almost costless for a busy node.
     node.contribution_minutes = 0.0
+    node.work_thkt = 0.0
     fails = node.failed_challenges
     if fails >= MAX_FAILS_BEFORE_SLASH:
         chain.slash(node.address, SLASH_AMOUNT_WEI, reason)
@@ -348,6 +398,14 @@ def settle_quorum(db: Session, q: Quorum) -> dict:
         job.result = q.consensus
         job.status = "done"
         job.assigned_node = out["agreed"][0] if out["agreed"] else None
+        # The buyer paid once, so one operator share is shared out between the
+        # nodes that agreed. Nodes that disagreed get nothing and are struck.
+        winners = out["agreed"]
+        if winners:
+            share = operator_share(job)
+            each = share / len(winners) if QUORUM_SPLIT_REWARD else share
+            for addr in winners:
+                credit_work(db, addr, each)
     else:
         # No majority — punish nobody, but the buyer still needs an answer. Hand
         # over the earliest one submitted and mark it unverified; the caller can
@@ -359,6 +417,11 @@ def settle_quorum(db: Session, q: Quorum) -> dict:
             job.result = rows[0].output
             job.status = "done"
             job.assigned_node = rows[0].node_address
+            # Inconclusive punishes nobody, so everyone who answered is paid —
+            # they each did the work, and no one was shown to be wrong.
+            each = operator_share(job) / len(rows) if QUORUM_SPLIT_REWARD else operator_share(job)
+            for r in rows:
+                credit_work(db, r.node_address, each)
         else:
             # Nobody answered at all — put it back in the ordinary queue rather
             # than leaving the buyer with nothing.
@@ -567,7 +630,7 @@ def submit_job(req: JobReq, db: Session = Depends(get_db)):
     job = Job(
         id=jid, kind=req.kind, prompt=req.prompt, image=req.image, payer=req.payer,
         payment_thkt=req.payment_thkt, payment_tx=req.payment_tx,
-        status="pending", created_at=time.time(),
+        status="pending", created_at=time.time(), price_thkt=price,
         # Shared sampling seed: every node running this job draws the same way,
         # so honest answers land close enough to be compared.
         seed=secrets.randbits(31),
@@ -642,6 +705,7 @@ def submit_batch(req: BatchReq, db: Session = Depends(get_db)):
         job = Job(id=f"{bid}-{i:04d}", kind=req.kind, prompt=p, image=it.image,
                   payer=req.payer, payment_thkt=0.0, payment_tx=req.payment_tx,
                   status="pending", created_at=now + i * 1e-6, batch_id=bid,
+                  price_thkt=quote_job(req.kind, p, bool(it.image), it.image_pixels),
                   seed=secrets.randbits(31))
         db.add(job)
         db.flush()
@@ -740,6 +804,7 @@ def job_result(jid: str, req: JobResultReq, db: Session = Depends(get_db)):
     job.status = "done" if req.ok else "failed"
     if req.ok:
         bump_tasks(db)          # only successful work counts as a task executed
+        credit_work(db, req.address, operator_share(job))
     db.commit()
     return {"ok": True}
 
@@ -802,7 +867,8 @@ def node_status(address: str, db: Session = Depends(get_db)):
         return {"registered": False}
     now = time.time()
     online = bool(node.last_heartbeat) and (now - node.last_heartbeat) <= HEARTBEAT_TIMEOUT_S
-    pending = node.contribution_minutes * REWARD_PER_MINUTE
+    uptime_thkt = node.contribution_minutes * REWARD_PER_MINUTE
+    pending = uptime_thkt + node.work_thkt
 
     claim = None
     for k, v in current_claims().items():
@@ -817,6 +883,11 @@ def node_status(address: str, db: Session = Depends(get_db)):
         "node_id": node.node_id,
         "reward_per_minute": REWARD_PER_MINUTE,
         "contribution_minutes": round(node.contribution_minutes, 4),
+        "lifetime_minutes": round(node.lifetime_minutes, 4),   # never reset
+        "uptime_thkt": round(uptime_thkt, 6),    # this epoch, from being online
+        "work_thkt": round(node.work_thkt, 6),   # this epoch, from jobs completed
+        "jobs_done": node.jobs_done,             # lifetime
+        "revenue_share": OPERATOR_REVENUE_SHARE,
         "pending_thkt": pending,                 # accrued this epoch, not yet claimable
         "settled_thkt": node.cumulative_reward,  # claimable (in the last root)
         "earned_thkt": node.cumulative_reward + pending,

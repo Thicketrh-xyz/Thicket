@@ -51,6 +51,8 @@ Nodes   ──▶ node client ────────────────�
 - **Redundant verification** — a sampled share of tasks runs on k=3 random nodes and is
   settled by majority; disagreement voids earnings and strikes, 3 strikes slashes the bond
 - Fixed-supply **pool tokenomics** (launchpad-compatible; rewards transferred, never minted)
+- **Work-based rewards** — operators earn uptime *plus* a share of what buyers paid for the
+  jobs they actually completed; a strike voids both
 - **Anti-sybil**: on-chain bond + EIP-191 signed heartbeats + challenges verified by quorum
   (or recompute, below k nodes) + slashing
 - **Real AI jobs** via Ollama — text (`llama3.2:1b`) and vision (`llava:7b`), capability-routed
@@ -67,10 +69,14 @@ Nodes   ──▶ node client ────────────────�
    buyer paid 62.39 THKT and the operator earned 0.237 THKT — *exactly* what an idle node earned
    over the same seconds. Two pricing bugs the measurement exposed are now fixed (silent document
    truncation, and per-megapixel pricing that charged 7.2x for identical work).
-   **Still to build:** rewards that track work done. The unit is tokens weighted by kind —
-   output costs ~20x input on this hardware — not minutes and not input characters. The node
-   already gets exact token counts back from Ollama; nothing stores them yet. Keep a small
-   non-zero uptime component so a node is worth running before demand exists.
+   **Built:** `reward = minutes x REWARD_PER_MINUTE + work_thkt`, where work_thkt is
+   `OPERATOR_REVENUE_SHARE` (0.7) of what the buyer paid for jobs that node completed.
+   Revenue share rather than a per-unit rate, because the pool is finite and a rate is an
+   unbounded claim on it. Work is priced server-side, never self-reported by the node.
+   Quorum jobs split one share between agreeing nodes.
+   **One thing left, and it's a decision not code:** `REWARD_PER_MINUTE` is still 1.0, so
+   uptime (60 THKT/hr) still dwarfs work (~3.5 THKT/job). Lower it — ~0.05 makes one job
+   beat an hour of idling — but keep it non-zero so a node is worth running before demand.
 2. ~~**Job verification.**~~ **Built** — see `VERIFICATION.md`. k-node quorum (k=3), 10%
    spot-check on paid work, majority settlement wired to the existing strike/slash path,
    recompute fallback when fewer than k nodes are online. `coordinator/sim.py` covers it.

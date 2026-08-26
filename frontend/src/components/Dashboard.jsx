@@ -32,6 +32,8 @@ export function Dashboard({ session, notify }) {
     ]);
     setNode(n); setRewards(r);
     if (n?.registered) {
+      // Only the uptime component ticks predictably; work lands in jumps when a
+      // job completes, and loadAll() picks those up on its 4s poll.
       sync.current = { base: n.earned_thkt, rate: n.online ? n.reward_per_minute / 60 : 0, t: Date.now(), online: n.online };
       setEarned(n.earned_thkt);
     }
@@ -64,7 +66,9 @@ export function Dashboard({ session, notify }) {
   const claimable = Number(formatUnits(claimableWei, 18));
   const claimedTotal = rewards ? Number(formatUnits(rewards.claimed, 18)) : 0;
   const balance = rewards ? Number(formatUnits(rewards.balance, 18)) : 0;
-  const totalMinutes = earned / rate;
+  // Reported by the coordinator, not derived from earnings — earnings now
+  // include work rewards, so dividing by the per-minute rate is meaningless.
+  const totalMinutes = node?.lifetime_minutes ?? node?.contribution_minutes ?? 0;
 
   async function onClaim() {
     if (!session) return notify("Connect your wallet to claim.");
@@ -114,8 +118,15 @@ export function Dashboard({ session, notify }) {
           ) : (
             <div style={{ marginTop: 12 }}>
               <div className="kv-row"><span className="k">Operator</span><span className="v">{address.slice(0, 6)}…{address.slice(-4)}</span></div>
-              <div className="kv-row"><span className="k">Reward rate</span><span className="v">{rate} THKT / min</span></div>
+              <div className="kv-row"><span className="k">Uptime rate</span><span className="v">{rate} THKT / min</span></div>
               <div className="kv-row"><span className="k">Contribution this epoch</span><span className="v">{fmt(node.contribution_minutes, 2)} min</span></div>
+              <div className="kv-row"><span className="k">From uptime this epoch</span><span className="v">{fmt(node.uptime_thkt ?? 0, 4)} THKT</span></div>
+              <div className="kv-row">
+                <span className="k">From work this epoch</span>
+                <span className="v">{fmt(node.work_thkt ?? 0, 4)} THKT
+                  {node.jobs_done ? ` · ${node.jobs_done} job${node.jobs_done === 1 ? "" : "s"} all-time` : ""}
+                </span>
+              </div>
               <div className="kv-row"><span className="k">Earned (live)</span><span className="v">{fmt(earned, 4)} THKT</span></div>
               {!online && <p className="hint">Node offline — figures frozen at the last heartbeat.</p>}
             </div>

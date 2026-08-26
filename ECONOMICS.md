@@ -104,17 +104,46 @@ with `b ≈ 20a`. This requires quoting a *maximum* output length up front, sinc
 length isn't knowable before the work runs — either cap it and price the cap, or quote a
 range and settle on actuals.
 
-For **rewards**, pay for the same thing that is charged for. The node already measures
-`seconds` per job and Ollama returns exact token counts; neither is currently stored. The
-smallest honest step is:
+For **rewards**, pay for the same thing that is charged for.
 
-1. Node reports `prompt_tokens` / `completion_tokens` alongside the result it already sends.
-2. Coordinator records them per job and accrues work-units, not just minutes.
-3. Reward becomes `uptime_component + work_component`, with uptime kept small and non-zero
-   so availability still pays — a node must be worth running before any job arrives.
+## Rewards: built
 
-Keeping a floor on uptime matters: rewards that are *purely* per-task make an idle network
-worthless to join, and Thicket needs nodes online and bonded before demand exists.
+`reward = contribution_minutes × REWARD_PER_MINUTE + work_thkt`, settled together each
+epoch. `work_thkt` is a share of what the buyer actually paid for the jobs that node
+completed: `OPERATOR_REVENUE_SHARE`, default **0.7**.
+
+**Revenue share rather than a per-work-unit rate.** The pool is finite — 350M, transferred
+and never minted — so an independent rate is an unbounded claim on it: emission would scale
+with demand, and nothing caps it. `RewardsDistributor` exposes `poolBalance()` but nothing
+ties published roots to it, so the failure mode is claims silently reverting on-chain. Paying
+out of money that actually came in makes the pool a subsidy buffer instead of the source.
+
+**Work is derived at the coordinator, never self-reported.** Ollama returns exact token
+counts, and the obvious design is to have the node send them up. That is a lie-to-earn
+vector — the node would be reporting the number it gets paid for. The coordinator already
+holds the prompt and receives the result, and prices the job server-side, so it needs
+nothing from the node it would have to trust.
+
+**Quorum jobs split one share.** The buyer paid once; `QUORUM_SPLIT_REWARD` (default on)
+divides the operator share between the nodes that agreed rather than paying each in full.
+Paying k nodes in full for one payment drains the pool by construction. Nodes are never
+told which jobs are cross-checked, so there is nothing to dodge. An inconclusive quorum
+pays everyone who answered — nobody was shown to be wrong.
+
+**A strike voids work earnings too.** `void_and_strike` zeroes `work_thkt` alongside
+`contribution_minutes`; leaving work behind would make a strike nearly costless for a busy
+node.
+
+### The uptime rate still needs lowering — deliberately
+
+`REWARD_PER_MINUTE` is **unchanged at 1.0**, so nobody earning today is suddenly worse off.
+But at 1 THKT/min an idle node earns 60 THKT/hour while a typical job pays about 3.5, so
+uptime still dwarfs work and a node would need ~17 jobs/hour just to match idling.
+
+Uptime has to stay non-zero — a node must be worth running before any work exists, or an
+idle network is worthless to join. But it should be a **subsidy, not the main income**.
+Around `0.05` THKT/min (3/hour) makes a single job worth more than an hour of idling. That
+is an economic decision, not a code one, and it is one env var.
 
 ## Findings 1 and 2 are fixed
 

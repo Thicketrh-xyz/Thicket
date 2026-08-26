@@ -364,6 +364,96 @@ def scenario_fresh_node_joins(db) -> None:
     check("it can answer its own task", newcomer.answer_challenge(out["challenge"])["ok"], True)
 
 
+def scenario_work_rewards(db) -> None:
+    print("\n[11] a node that does work earns more than one that just idles")
+    _reset(db)
+    worker, idler = VirtualNode(db, 0), VirtualNode(db, 1)
+    worker.beat(); idler.beat()
+
+    jid = coord.submit_job(coord.JobReq(
+        prompt="Summarise this document.", payer=idler.address, kind="text"), db)["id"]
+    price = db.get(Job, jid).price_thkt
+    check("job stored its own price", price > 0, True)
+
+    worker.beat()                       # picks the job up
+    worker.answer_job(jid, "A summary.")
+    idler.beat()                        # uptime accrues between beats, so it needs a second
+    db.expire_all()
+
+    expected = round(price * coord.OPERATOR_REVENUE_SHARE, 6)
+    check("worker paid a share of the job price", round(worker.row.work_thkt, 6), expected)
+    check("worker's job counted", worker.row.jobs_done, 1)
+    check("idler earned nothing from work", idler.row.work_thkt, 0.0)
+    check("both still earn uptime", worker.row.contribution_minutes > 0
+          and idler.row.contribution_minutes > 0, True)
+
+
+def scenario_quorum_reward_split(db) -> None:
+    print("\n[12] one payment is split between the nodes that agreed")
+    _reset(db)
+    nodes = [VirtualNode(db, i) for i in range(3)]
+    for n in nodes:
+        n.beat()
+
+    real_roll = qm.should_spot_check
+    qm.should_spot_check = lambda: True
+    try:
+        jid = coord.submit_job(coord.JobReq(
+            prompt="Summarise this document.", payer=nodes[0].address, kind="text"), db)["id"]
+    finally:
+        qm.should_spot_check = real_roll
+
+    price = db.get(Job, jid).price_thkt
+    dispatched = [n for n in nodes if any(j["id"] == jid for j in n.beat().get("jobs", []))]
+    dispatched[0].answer_job(jid, "The document explains the reward split.")
+    dispatched[1].answer_job(jid, "The document explains the reward split.")
+    dispatched[2].answer_job(jid, "Unrelated spam text.")
+    db.expire_all()
+
+    share = price * coord.OPERATOR_REVENUE_SHARE
+    paid = [round(db.get(Node, n.address).work_thkt, 6) for n in dispatched]
+    check("the two who agreed split one share", sorted(paid)[1:],
+          [round(share / 2, 6), round(share / 2, 6)])
+    check("the one who disagreed earned nothing", sorted(paid)[0], 0.0)
+    check("total paid never exceeds one share", round(sum(paid), 6), round(share, 6))
+
+
+def scenario_strike_voids_work(db) -> None:
+    print("\n[13] a strike voids work earnings, not just minutes")
+    _reset(db)
+    solo = VirtualNode(db, 0)
+    ch = solo.beat()["challenge"]
+    jid = coord.submit_job(coord.JobReq(
+        prompt="Summarise this document.", payer=solo.address, kind="text"), db)["id"]
+    solo.beat()
+    solo.answer_job(jid, "A summary.")
+    db.expire_all()
+    check("earned something first", solo.row.work_thkt > 0, True)
+
+    solo.answer_challenge(ch, honest=False)      # caught lying
+    db.expire_all()
+    check("work earnings voided", solo.row.work_thkt, 0.0)
+    check("minutes voided too", solo.row.contribution_minutes, 0.0)
+
+
+def scenario_lifetime_minutes(db) -> None:
+    print("\n[14] lifetime minutes survive settlement and voiding")
+    _reset(db)
+    n = VirtualNode(db, 0)
+    n.beat(); n.beat()
+    db.expire_all()
+    before = n.row.lifetime_minutes
+    check("accruing", before > 0, True)
+
+    close_epoch()
+    db.expire_all()
+    check("survives an epoch close", n.row.lifetime_minutes, before)
+    check("epoch minutes reset", n.row.contribution_minutes, 0.0)
+
+    coord.void_and_strike(db, n.address, "test"); db.commit(); db.expire_all()
+    check("survives a strike", n.row.lifetime_minutes, before)
+
+
 def run() -> None:
     init_db()
     db = SessionLocal()
@@ -373,7 +463,9 @@ def run() -> None:
         for scenario in (scenario_majority, scenario_inconclusive, scenario_straggler,
                          scenario_too_few_nodes, scenario_slash, scenario_job_quorum,
                          scenario_broken_node, scenario_epoch_holdback,
-                         scenario_no_double_dispatch, scenario_fresh_node_joins):
+                         scenario_no_double_dispatch, scenario_fresh_node_joins,
+                         scenario_work_rewards, scenario_quorum_reward_split,
+                         scenario_strike_voids_work, scenario_lifetime_minutes):
             scenario(db)
     finally:
         db.close()

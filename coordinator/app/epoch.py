@@ -43,8 +43,12 @@ def close_epoch() -> dict:
             if node.address in awaiting:
                 held += 1
             else:
-                node.cumulative_reward += node.contribution_minutes * REWARD_PER_MINUTE
+                # Two components: time online, plus a share of what buyers paid
+                # for the work this node actually did.
+                node.cumulative_reward += (node.contribution_minutes * REWARD_PER_MINUTE
+                                           + node.work_thkt)
                 node.contribution_minutes = 0.0
+                node.work_thkt = 0.0
             wei = int(node.cumulative_reward * 1e18)
             if wei > 0:
                 entries.append((node.address, wei))
