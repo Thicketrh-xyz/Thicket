@@ -5,6 +5,7 @@ import { fetchComputePrice, submitJob, fetchJob, fetchStats } from "../lib/api";
 import { payForCompute, getPoolBalance } from "../lib/chain";
 import { CONTRACTS_LIVE, explorerTx } from "../config";
 import { prepareImage } from "../lib/image";
+import { readTextFile, TEXT_ACCEPT } from "../lib/textfile";
 import { SectionLabel } from "./SiteChrome";
 
 const fmt = (n) => (n == null ? "—" : Math.round(Number(n)).toLocaleString("en-US"));
@@ -142,18 +143,22 @@ export function ComputePanel({ session, notify }) {
 
           {kind === "text" && (
             <div className="field">
-              <label>Attach a text file (optional)</label>
-              <input className="input" type="file" accept=".txt,.md,.csv,.json,text/*" onChange={(e) => {
+              <label>Attach a document (optional)</label>
+              <input className="input" type="file" accept={TEXT_ACCEPT} onChange={async (e) => {
                 const f = e.target.files?.[0];
                 if (!f) { setFileName(""); return; }
-                const reader = new FileReader();
-                reader.onload = () => {
-                  // Append the document to whatever instruction is already typed.
-                  const body = String(reader.result || "");
-                  setPrompt((cur) => (cur.trim() ? `${cur.trim()}\n\n${body}` : body));
-                  setFileName(f.name);
-                };
-                reader.readAsText(f);
+                try {
+                  const out = await readTextFile(f);
+                  setPrompt((cur) => (cur.trim() ? cur.trim() + "\n\n" + out.text : out.text));
+                  setFileName(f.name + " \u2014 " + out.chars.toLocaleString() + " chars");
+                  if (out.tooLong) {
+                    notify("That document is very large \u2014 the model may only read the first part of it.");
+                  }
+                } catch (err) {
+                  setFileName("");
+                  e.target.value = "";
+                  notify(err.message);
+                }
               }} />
               {fileName && <p className="hint" style={{ marginTop: 8 }}>{fileName} loaded — {prompt.length.toLocaleString()} chars</p>}
             </div>
