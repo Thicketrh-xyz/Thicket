@@ -30,6 +30,19 @@ export async function ensureNetwork() {
   }
 }
 
+// Ask the wallet to forget this site. Not all wallets implement revoke, so the
+// app always clears its own session regardless of the outcome.
+export async function disconnect() {
+  try {
+    await window.ethereum?.request({
+      method: "wallet_revokePermissions",
+      params: [{ eth_accounts: {} }],
+    });
+  } catch {
+    /* wallet doesn't support revoke — clearing local session is enough */
+  }
+}
+
 export async function connect() {
   if (!hasWallet()) throw new Error("No wallet found. Install MetaMask.");
   await window.ethereum.request({ method: "eth_requestAccounts" });
