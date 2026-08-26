@@ -94,7 +94,7 @@ export function SiteFooter() {
       <div className="footer__links">
         <div>
           <span>NETWORK</span>
-          <a href="/docs#run-a-node">Run a node</a>
+          <a href="/docs/run-a-node">Run a node</a>
           <a href="/app#stake">Stake THKT</a>
           <a href="/#roadmap">Roadmap</a>
         </div>

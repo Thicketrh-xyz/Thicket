@@ -40,7 +40,7 @@ const roles = [
     title: "Put your GPU to work.",
     body: "Bond THKT, run a node, and earn for compute the network can verify.",
     action: "Run a node",
-    href: "https://www.thicketrh.xyz/docs#run-a-node",
+    href: "https://www.thicketrh.xyz/docs/run-a-node",
     accent: "operator",
   },
   {
@@ -60,7 +60,7 @@ const roles = [
     title: "Build on open compute.",
     body: "Send AI workloads to a distributed GPU network through a simple API.",
     action: "Read API docs",
-    href: "https://www.thicketrh.xyz/docs#api",
+    href: "https://www.thicketrh.xyz/docs/api",
     accent: "builder",
   },
 ];
@@ -316,7 +316,7 @@ export default function Home() {
           <div className="builder-band__eyebrow"><Terminal size={16} /> THICKET / API PREVIEW</div>
           <div className="builder-band__content">
             <div><h2>A compute layer builders can actually <em>call.</em></h2><p>Route AI workloads across a distributed GPU pool without managing every machine yourself.</p></div>
-            <a className="button button--lime-outline" href="https://www.thicketrh.xyz/docs#api">Read API docs <ArrowUpRight size={18} /></a>
+            <a className="button button--lime-outline" href="https://www.thicketrh.xyz/docs/api">Read API docs <ArrowUpRight size={18} /></a>
           </div>
           <div className="terminal-card">
             <div className="terminal-card__bar"><span /><span /><span /><small>thicket-runtime / request</small></div>
@@ -329,7 +329,7 @@ export default function Home() {
           <div className="evidence__heading"><SectionLabel>NETWORK TRANSPARENCY</SectionLabel><h2>See the network <em>working.</em></h2></div>
           <p className="evidence__intro">Thicket is growing in public. Each capability is clearly labelled, documented, and connected to its current network state.</p>
           <div className="evidence-grid">
-            <a href="https://www.thicketrh.xyz/docs#run-a-node" className="evidence-card"><Cpu size={21} /><div><span className="pill pill--live">TESTNET</span><h3>Node client</h3><p>Run and contribute from your own hardware.</p></div><ArrowUpRight size={18} /></a>
+            <a href="https://www.thicketrh.xyz/docs/run-a-node" className="evidence-card"><Cpu size={21} /><div><span className="pill pill--live">TESTNET</span><h3>Node client</h3><p>Run and contribute from your own hardware.</p></div><ArrowUpRight size={18} /></a>
             <a href="https://www.thicketrh.xyz/docs" className="evidence-card"><Signal size={21} /><div><span className="pill pill--live">ENABLED</span><h3>Verification challenges</h3><p>Periodic checks validate useful computation.</p></div><ArrowUpRight size={18} /></a>
             <a href="https://www.thicketrh.xyz/app" className="evidence-card"><Zap size={21} /><div><span className="pill pill--live">ON-CHAIN</span><h3>Reward claims</h3><p>Verified minutes settle each epoch.</p></div><ArrowUpRight size={18} /></a>
             <a href="https://github.com/Thicketrh-xyz/Thicket" className="evidence-card"><Github size={21} /><div><span className="pill pill--open">OPEN</span><h3>Build in public</h3><p>Explore the code, docs, and implementation.</p></div><ArrowUpRight size={18} /></a>
@@ -357,7 +357,7 @@ export default function Home() {
           <SectionLabel light>START GROWING</SectionLabel>
           <h2>Bring a GPU.<br />Bring capital.<br /><em>Bring code.</em></h2>
           <p>One open network for the compute-heavy work modern AI needs.</p>
-          <div className="final-cta__actions"><a className="button button--primary" href="https://www.thicketrh.xyz/docs#run-a-node">Run a node <ArrowUpRight size={18} /></a><a className="button button--dark-quiet" href="https://www.thicketrh.xyz/app">Open app <ArrowUpRight size={18} /></a></div>
+          <div className="final-cta__actions"><a className="button button--primary" href="https://www.thicketrh.xyz/docs/run-a-node">Run a node <ArrowUpRight size={18} /></a><a className="button button--dark-quiet" href="https://www.thicketrh.xyz/app">Open app <ArrowUpRight size={18} /></a></div>
         </section>
       </main>
 

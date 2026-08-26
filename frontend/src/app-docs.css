@@ -129,3 +129,40 @@
   .docs-side { display: none; }
 }
 @media (max-width: 620px) { .tile-row { grid-template-columns: 1fr; } }
+
+/* --- docs: split into pages ------------------------------------------- */
+/* The sidebar navigates between documents now rather than scrolling one, so
+   the current page needs to be obvious at a glance. */
+.docs-side a.is-active {
+  color: var(--ink, #1a1f1a);
+  font-weight: 600;
+}
+
+.docs-pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 56px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line, #e4e8e2);
+}
+
+.docs-pager__link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 48%;
+  text-decoration: none;
+}
+
+.docs-pager__link--next { text-align: right; margin-left: auto; }
+
+.docs-pager__link span {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.docs-pager__link strong { font-size: 1rem; }
+.docs-pager__link:hover strong { text-decoration: underline; }
