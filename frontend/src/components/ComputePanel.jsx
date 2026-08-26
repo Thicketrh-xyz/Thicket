@@ -4,6 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 import { fetchComputePrice, submitJob, fetchJob, fetchStats } from "../lib/api";
 import { payForCompute, getPoolBalance } from "../lib/chain";
 import { CONTRACTS_LIVE, explorerTx } from "../config";
+import { prepareImage } from "../lib/image";
 import { SectionLabel } from "./SiteChrome";
 
 const fmt = (n) => (n == null ? "—" : Math.round(Number(n)).toLocaleString("en-US"));
@@ -121,16 +122,19 @@ export function ComputePanel({ session, notify }) {
           {kind === "vision" && (
             <div className="field">
               <label>Image</label>
-              <input className="input" type="file" accept="image/*" onChange={(e) => {
+              <input className="input" type="file" accept="image/*" onChange={async (e) => {
                 const f = e.target.files?.[0];
                 if (!f) { setImage(null); setImageName(""); return; }
-                const reader = new FileReader();
-                reader.onload = () => {
-                  // strip the "data:image/png;base64," prefix — the model wants raw base64
-                  setImage(String(reader.result).split(",")[1] || null);
-                  setImageName(f.name);
-                };
-                reader.readAsDataURL(f);
+                try {
+                  // Normalise to JPEG so formats like WebP still work.
+                  const out = await prepareImage(f);
+                  setImage(out.base64);
+                  setImageName(`${f.name} — ${out.width}×${out.height}, ${(out.bytes / 1024).toFixed(0)}KB`
+                    + (out.converted ? " (converted)" : ""));
+                } catch (err) {
+                  setImage(null); setImageName("");
+                  notify(err.message || "Could not read that image.");
+                }
               }} />
               {imageName && <p className="hint" style={{ marginTop: 8 }}>{imageName} ready</p>}
             </div>
