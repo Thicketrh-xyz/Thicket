@@ -107,6 +107,9 @@ All need a funded wallet or more hardware. Expect rough edges there first.
 - Coordinator schema changes need an entry in `_ADDED` / `_WIDENED` in `coordinator/app/db.py` —
   `create_all()` won't alter live tables.
 - Node env values must not have inline comments (`KEY=  # note` becomes the note).
+- Key resolution order is `--key` > `THICKET_PRIVATE_KEY`/`node/.env` > macOS Keychain >
+  interactive prompt. `--save-key` has macOS collect the key itself, so it never touches
+  argv or shell history; `node/.env` is the fallback elsewhere and wants `chmod 600`.
 
 ## Running things
 
@@ -114,8 +117,9 @@ All need a funded wallet or more hardware. Expect rough edges there first.
 # verification scenarios (no server, no chain, no model)
 cd coordinator && .venv/bin/python -m sim
 
-# node
-cd node && .venv/bin/python -u -m thicket_node.client        # prompts for key
+# node — save the key once (macOS Keychain), then just run it
+cd node && .venv/bin/python -m thicket_node.client --save-key
+cd node && .venv/bin/python -u -m thicket_node.client
 ollama pull llama3.2:1b     # text jobs      (optional, but needed to serve work)
 ollama pull llava:7b        # vision jobs
 

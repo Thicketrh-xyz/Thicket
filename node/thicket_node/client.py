@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import subprocess
 import sys
 import time
 
@@ -22,7 +23,7 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from .bond import ensure_bonded
-from .config import Config
+from .config import KEYCHAIN_SERVICE, Config, keychain_key
 from .runtime import detect_capabilities
 from .work import run_job, solve_challenge
 
@@ -119,6 +120,40 @@ def _normalise_key(k: str) -> str:
     return k
 
 
+def _save_key() -> None:
+    """Store the operator key in the macOS Keychain, once.
+
+    `security` is invoked with -w last and no value, which makes macOS prompt for
+    the key itself. That's deliberate: the key never reaches this process, the
+    command line, or shell history — the three places it leaks from today.
+    """
+    if sys.platform != "darwin":
+        print("The Keychain option is macOS-only.")
+        print("Elsewhere, put THICKET_PRIVATE_KEY in node/.env and chmod 600 it.")
+        raise SystemExit(1)
+    print("Paste your operator private key at the prompt below.")
+    print("macOS collects it directly — it isn't stored in your shell history.")
+    print()
+    r = subprocess.run(["security", "add-generic-password",
+                        "-a", getpass.getuser(), "-s", KEYCHAIN_SERVICE, "-U", "-w"])
+    if r.returncode != 0:
+        raise SystemExit("Keychain write failed — nothing was saved.")
+    print()
+    print("Saved. Start the node with just:")
+    print("  python -m thicket_node.client")
+    print()
+    print("To remove it later:  python -m thicket_node.client --forget-key")
+
+
+def _forget_key() -> None:
+    if sys.platform != "darwin":
+        raise SystemExit("The Keychain option is macOS-only.")
+    r = subprocess.run(["security", "delete-generic-password", "-s", KEYCHAIN_SERVICE],
+                       capture_output=True)
+    print("Removed from the Keychain." if r.returncode == 0
+          else "No Thicket key was stored in the Keychain.")
+
+
 def _new_wallet() -> None:
     acct = Account.create()
     key = acct.key.hex()
@@ -147,10 +182,20 @@ def main() -> None:
     p.add_argument("--skip-bond", action="store_true", help="skip on-chain bonding (already bonded)")
     p.add_argument("--interval", type=int, dest="heartbeat_interval", help="seconds between heartbeats")
     p.add_argument("--new-wallet", action="store_true", help="generate a fresh wallet and exit")
+    p.add_argument("--save-key", action="store_true",
+                   help="store your key in the macOS Keychain so you never pass it again")
+    p.add_argument("--forget-key", action="store_true",
+                   help="remove the stored key from the macOS Keychain")
     args = p.parse_args()
 
     if args.new_wallet:
         _new_wallet()
+        return
+    if args.save_key:
+        _save_key()
+        return
+    if args.forget_key:
+        _forget_key()
         return
 
     cfg = Config.load(
@@ -167,12 +212,17 @@ def main() -> None:
         if not sys.stdin.isatty():
             raise SystemExit(
                 "No wallet key.\n"
-                "  Pass one:      python -m thicket_node.client --key 0xYOUR_KEY\n"
-                "  Or save it:    echo 'THICKET_PRIVATE_KEY=0xYOUR_KEY' >> .env\n"
+                "  Save it once:  python -m thicket_node.client --save-key   (macOS Keychain)\n"
+                "  Or in a file:  echo 'THICKET_PRIVATE_KEY=0xYOUR_KEY' >> .env && chmod 600 .env\n"
+                "  Or pass one:   python -m thicket_node.client --key 0xYOUR_KEY\n"
                 "  No wallet yet: python -m thicket_node.client --new-wallet"
             )
         print("No wallet key found. Paste it below (input stays hidden),")
         print("or just press Enter to generate a new wallet.")
+        if sys.platform == "darwin":
+            print()
+            print("Tired of pasting it? Save it once:")
+            print("  python -m thicket_node.client --save-key")
         print()
         entered = getpass.getpass("Private key: ").strip()
         if not entered:

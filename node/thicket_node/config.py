@@ -9,6 +9,8 @@ Values are resolved in this order (first wins):
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from dataclasses import dataclass, field
 
 try:
@@ -30,6 +32,31 @@ def _clean(v) -> str:
 
 def _bool(v) -> bool:
     return _clean(v).lower() in ("1", "true", "yes", "on")
+
+
+KEYCHAIN_SERVICE = "thicket-node"
+
+
+def keychain_key() -> str:
+    """The operator key from the macOS Keychain, or "" if there isn't one.
+
+    Better than node/.env for the obvious reason: the Keychain encrypts it at
+    rest and unlocks with the login session, where a dotfile is plaintext that a
+    stray `cat`, a backup, or a mis-set permission bit will happily hand over.
+    And unlike passing --key, nothing ends up in shell history.
+
+    Silent on failure — no Keychain, no entry, or a locked one all just mean
+    "fall through to the next source".
+    """
+    if sys.platform != "darwin":
+        return ""
+    try:
+        out = subprocess.run(
+            ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
+            capture_output=True, text=True, timeout=15)
+    except Exception:  # noqa: BLE001 — security missing or hung
+        return ""
+    return _clean(out.stdout) if out.returncode == 0 else ""
 
 
 def _amount(v) -> str:
@@ -59,7 +86,9 @@ class Config:
     def load(cls, **overrides) -> "Config":
         """Env first, then any non-empty CLI overrides on top."""
         cfg = cls(
-            private_key=_clean(os.getenv("THICKET_PRIVATE_KEY")),
+            # env / node/.env first so an explicit override still wins, then the
+            # Keychain, then (in client.py) an interactive prompt.
+            private_key=_clean(os.getenv("THICKET_PRIVATE_KEY")) or keychain_key(),
             node_id=_clean(os.getenv("NODE_ID")) or "node-1",
             coordinator_url=_clean(os.getenv("COORDINATOR_URL")) or cls.coordinator_url,
             heartbeat_interval=int(_clean(os.getenv("HEARTBEAT_INTERVAL")) or 30),
