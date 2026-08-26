@@ -90,12 +90,13 @@ All need a funded wallet or more hardware. Expect rough edges there first.
 
 ## Gotchas
 
-- **Git pushes need the `Gentle2003` account.** `gh` has two accounts; `parleyrobinhood` (a
-  different project) is usually active and has no access to this org. Switch, push, switch back:
+- **Git pushes need the `Gentle2003` account.** `gh` has two accounts and its credential
+  helper only ever serves the *active* one (gh 2.97: a username in the remote URL is
+  ignored), so the active account decides the push. `Gentle2003` is the one with access
+  to this org and should stay active — don't switch back to `parleyrobinhood` afterwards,
+  that only leaves the next session unable to push. If it's ever not active:
   ```
   gh auth switch --hostname github.com --user Gentle2003
-  git push origin main
-  gh auth switch --hostname github.com --user parleyrobinhood
   ```
 - Commits are authored as **Thicket Team**, deliberately — the repo is public.
 - `reference/` is git-ignored (design source, local only).
