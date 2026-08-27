@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUpRight, Github, Mail } from "lucide-react";
+import { ArrowUpRight, CandlestickChart, Github, Mail } from "lucide-react";
 
 // The real X wordmark — lucide's `X` is a close icon, not the brand.
 export const XLogo = ({ size = 16 }) => (
@@ -12,6 +12,7 @@ const MARK = "/logo.png";
 const X_URL = "https://x.com/thicket_rh";
 const GITHUB = "https://github.com/Thicketrh-xyz/Thicket";
 const SUPPORT_MAIL = "thicket@thicketrh.xyz";
+const DEXSCREENER = "https://dexscreener.com/robinhood/0xbf2b37e83be2c037f02aab73d2d2dba7a054e1cf6a9de4575d532cc50fd61703";
 const SUPPORT = `mailto:${SUPPORT_MAIL}`;
 
 
@@ -94,6 +95,7 @@ export function SiteFooter() {
       <div className="footer__links">
         <div>
           <span>NETWORK</span>
+          <a href="/docs/buy">How to buy THKT</a>
           <a href="/docs/run-a-node">Run a node</a>
           <a href="/app#stake">Stake THKT</a>
           <a href="/#roadmap">Roadmap</a>
@@ -108,6 +110,9 @@ export function SiteFooter() {
           <span>COMMUNITY</span>
           <a className="footer__x" href={X_URL} target="_blank" rel="noreferrer" aria-label="Thicket on X">
             <XLogo size={20} />
+          </a>
+          <a className="footer__x" href={DEXSCREENER} target="_blank" rel="noreferrer" aria-label="THKT price chart on DexScreener">
+            <CandlestickChart size={20} />
           </a>
           <SupportLink />
         </div>

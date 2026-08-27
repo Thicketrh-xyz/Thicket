@@ -2,6 +2,7 @@ import { DocsLayout } from "./docs/Layout";
 import { currentSlug } from "./docs/shared";
 
 import { Overview } from "./docs/pages/Overview";
+import { BuyThkt } from "./docs/pages/BuyThkt";
 import { Status } from "./docs/pages/Status";
 import { Architecture } from "./docs/pages/Architecture";
 import { RunNode } from "./docs/pages/RunNode";
@@ -21,6 +22,7 @@ import { Faq } from "./docs/pages/Faq";
 // specific topic survive edits to everything around it.
 const ROUTES = {
   "": Overview,
+  "buy": BuyThkt,
   "status": Status,
   "architecture": Architecture,
   "run-a-node": RunNode,

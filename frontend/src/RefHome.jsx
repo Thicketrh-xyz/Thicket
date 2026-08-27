@@ -15,6 +15,7 @@ import {
   Leaf,
   Mail,
   Menu,
+  CandlestickChart,
   Network,
   Signal,
   Sprout,
@@ -364,7 +365,7 @@ export default function Home() {
 
       <footer className="footer">
         <div className="footer__brand"><BrandMark /><p>A decentralized GPU network. Grow the thicket, earn from your compute.</p><div className="footer__status"><span /> MAINNET OPERATIONAL</div></div>
-        <div className="footer__links"><div><span>NETWORK</span><a href="#participate">Run a node</a><a href="https://www.thicketrh.xyz/app#stake">Stake THKT</a><a href="#roadmap">Roadmap</a></div><div><span>DEVELOPERS</span><a href="#verification">How it works</a><a href="https://www.thicketrh.xyz/docs">Documentation</a><a href="https://github.com/Thicketrh-xyz/Thicket">GitHub</a></div><div><span>COMMUNITY</span><a className="footer__x" href="https://x.com/thicket_rh" target="_blank" rel="noreferrer" aria-label="Thicket on X"><XLogo size={20} /></a><SupportLink /></div></div>
+        <div className="footer__links"><div><span>NETWORK</span><a href="https://www.thicketrh.xyz/docs/buy">How to buy THKT</a><a href="#participate">Run a node</a><a href="https://www.thicketrh.xyz/app#stake">Stake THKT</a><a href="#roadmap">Roadmap</a></div><div><span>DEVELOPERS</span><a href="#verification">How it works</a><a href="https://www.thicketrh.xyz/docs">Documentation</a><a href="https://github.com/Thicketrh-xyz/Thicket">GitHub</a></div><div><span>COMMUNITY</span><a className="footer__x" href="https://x.com/thicket_rh" target="_blank" rel="noreferrer" aria-label="Thicket on X"><XLogo size={20} /></a><a className="footer__x" href="https://dexscreener.com/robinhood/0xbf2b37e83be2c037f02aab73d2d2dba7a054e1cf6a9de4575d532cc50fd61703" target="_blank" rel="noreferrer" aria-label="THKT price chart on DexScreener"><CandlestickChart size={20} /></a><SupportLink /></div></div>
         <div className="footer__legal"><span>© 2026 THICKET</span><span>Built on Robinhood Chain</span><a href="#top">Back to top <ArrowDown size={14} /></a></div>
       </footer>
     </div>

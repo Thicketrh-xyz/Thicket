@@ -9,6 +9,7 @@ export const TOKEN = "0xC4F36C7c1D00dcaab1d01159466afa189BFc7161";
 export const STAKING = "0xB179254Ca9A5eB59270c6a0088DD46a8a07b9bb9";
 export const DIST = "0x1c890110e9cc3dAdeBD6c449437606783B4B682b";
 export const REPO = "https://github.com/Thicketrh-xyz/Thicket";
+export const DEXSCREENER = "https://dexscreener.com/robinhood/0xbf2b37e83be2c037f02aab73d2d2dba7a054e1cf6a9de4575d532cc50fd61703";
 export const PORTAL = "/app";
 
 export const NAV = [
@@ -24,6 +25,7 @@ export const PAGES = [
     group: "Start here",
     items: [
       ["", "Overview", "What Thicket is and how the loop fits together"],
+      ["buy", "How to buy THKT", "The contract address, and what to check before you swap"],
       ["status", "What's live now", "Exactly what is deployed, and what isn't"],
       ["architecture", "Architecture", "The pieces, and which of them you trust"],
     ],
