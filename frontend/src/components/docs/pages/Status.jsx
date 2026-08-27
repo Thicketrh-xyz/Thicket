@@ -41,7 +41,7 @@ export function Status() {
       <ul>
         <li><strong>The bond is only checked at registration.</strong> An operator who unbonds afterwards keeps earning until the coordinator restarts. A real hole in the anti-sybil model.</li>
         <li><strong>Operators cannot refuse jobs.</strong> Whatever a buyer sends runs on their machine. There is no content policy and no opt-out.</li>
-        <li><strong>Most work is not verified.</strong> Only a sampled share of paid jobs is cross-checked; the rest is policed by the risk of being sampled. Spot-checking, not proof.</li>
+        <li><strong>Most work is not verified.</strong> Paid jobs are cross-checked only at the sampling rate in <code>spot_check_rate</code> on <code>{`GET /stats`}</code> — at zero, none are. Challenges are always verified; paid output is spot-checked at best, never proven.</li>
         <li><strong>The coordinator is a single point of trust and failure.</strong> One service decides what everyone earned.</li>
         <li><strong>No refunds.</strong> Payment enters the pool before the work runs and cannot be pulled back, including for a failed job.</li>
         <li><strong>No image generation.</strong> Vision means image-to-text. Generation needs a diffusion runtime that is not wired up.</li>

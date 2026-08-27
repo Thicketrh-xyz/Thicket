@@ -27,13 +27,25 @@ export function Faq() {
         arrives — there is no inflation to fall back on.</p>
 
       <h3>Does delegating earn me anything?</h3>
-      <p>No. The contract tracks delegated stake but no rewards flow to delegators, and there is no
-        commission split. See <a href="/docs/staking">Staking &amp; delegation</a>.</p>
+      <p>Yes. An operator's earnings are split with the stake behind it: you get your pro-rata
+        share of the delegated portion, and the operator takes a 20% commission on it. Rewards
+        land in the same Merkle root operators claim from, so you claim with the wallet you
+        delegated from. Worked example on <a href="/docs/staking">Staking &amp; delegation</a>.</p>
+      <p>Two things to know: delegated stake is <strong>not</strong> slashed, so you carry no
+        downside — but an operator whose window is voided by a failed challenge earns nothing
+        that epoch and therefore pays you nothing, so who you pick still matters.</p>
 
       <h3>Is all the work verified?</h3>
-      <p>No — a sampled share is cross-checked by three nodes, and the rest is policed by the risk
-        of being sampled. That is spot-checking, not proof. The honest description is on{" "}
-        <a href="/docs/verification">Challenges &amp; slashing</a>.</p>
+      <p>No. Two separate things are worth keeping apart.</p>
+      <p><strong>Challenges</strong> are always verified — by a three-node quorum when enough
+        nodes are online, and by the coordinator recomputing the answer when they aren't. That
+        is what the bond and the slashing are attached to.</p>
+      <p><strong>Paid jobs</strong> are cross-checked only at a sampling rate, and that rate is
+        a live setting rather than a fixed property of the network. Read it from{" "}
+        <code>spot_check_rate</code> on <code>{`GET /stats`}</code> — at zero, no paid job is
+        being cross-checked at all, and the answer you receive is whatever the single node that
+        ran it returned. Even at a non-zero rate this is spot-checking rather than proof. Full
+        description on <a href="/docs/verification">Challenges &amp; slashing</a>.</p>
 
       <h3>Can I choose which jobs my node runs?</h3>
       <p>Not yet. Beyond capability routing — a text-only node never receives vision work — whatever
