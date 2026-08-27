@@ -54,17 +54,6 @@ export function DocsLayout({ slug, children }) {
           <h1>{title}</h1>
           <p className="lede">{blurb}</p>
 
-          {/* Shown on every page: the one caveat a reader must not miss, wherever
-              they landed. Self-links are dropped so it doesn't point at itself. */}
-          <div className="callout" style={{ marginBottom: 28 }}>
-            <strong>Testnet, unaudited.</strong> Thicket runs on{" "}
-            {slug === "status" ? "Robinhood Chain testnet"
-              : <a href="/docs/status">Robinhood Chain testnet</a>}. THKT here has no
-            monetary value and the contracts have not been audited. Never put real funds
-            behind it, and never share your private key with anyone.
-            {slug !== "security" && <> See <a href="/docs/security">Private key security</a>.</>}
-          </div>
-
           {children}
 
           <nav className="docs-pager">

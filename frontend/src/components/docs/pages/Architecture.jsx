@@ -34,7 +34,7 @@ Nodes    ──▶  client    ──────────┘`}</div>
 
       <h3>Why a coordinator at all</h3>
       <p>Everything the coordinator does could in principle be on-chain, and none of it would be affordable. Counting a heartbeat every 30 seconds for every node, per node, would cost more gas than the rewards are worth. So contribution is measured off-chain and <em>settled</em> on-chain once per epoch as a single cumulative root — one transaction covering every operator, however many there are.</p>
-      <p>That is the trade: cheap and fast, at the cost of a component you have to trust. The honest description of Thicket today is a <strong>decentralised network with a centralised coordinator</strong>. Decentralising it is a real piece of work and it has not been done.</p>
+      <p>That is the trade: cheap and fast, at the cost of a component you have to trust.</p>
 
       <h3>If the coordinator goes down</h3>
       <ul>
