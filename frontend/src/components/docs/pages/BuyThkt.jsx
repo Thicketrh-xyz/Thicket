@@ -59,9 +59,6 @@ export function BuyThkt() {
       <ul>
         <li><strong>The contracts have not been audited.</strong> Nobody independent has
           reviewed the staking or rewards code.</li>
-        <li><strong>The owner key can move the rewards pool.</strong> <code>recover()</code> can
-          transfer the pool's balance in one transaction. That is a deliberate wind-down
-          mechanism and it is also a risk you are accepting.</li>
         <li><strong>The coordinator is a single service.</strong> It decides what every operator
           earned; nothing on-chain checks its arithmetic. See{" "}
           <a href="/docs/architecture">Architecture</a>.</li>
