@@ -2,7 +2,7 @@
 export function Sdk() {
   return (
     <>
-      <p>An autonomous agent can't open an account, add a card, or click through a billing flow — but it can hold a wallet. The SDK turns a job into a single call: approve THKT, pay into the rewards pool on-chain, submit the job, wait for a node, return the result.</p>
+      <p>An autonomous agent can't open an account, add a card, or click through a billing flow, but it can hold a wallet. The SDK turns a job into a single call: approve THKT, pay into the rewards pool on-chain, submit the job, wait for a node, return the result.</p>
 
       <h3>Install</h3>
       <div className="code">{`pip install web3 requests pillow
