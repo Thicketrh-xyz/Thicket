@@ -26,8 +26,8 @@ from app import main as coord  # noqa: E402
 from app import quorum as qm  # noqa: E402
 from app import signing  # noqa: E402
 from app.challenge import make_challenge, solve  # noqa: E402
-from app.db import Job, Node, Quorum, QuorumResult, SessionLocal, init_db  # noqa: E402
-from app.epoch import close_epoch  # noqa: E402
+from app.db import Delegation, Job, Node, Quorum, QuorumResult, SessionLocal, init_db  # noqa: E402
+from app.epoch import OPERATOR_COMMISSION, close_epoch, split_earnings  # noqa: E402
 
 WRONG = "0x" + "de" * 32
 
@@ -454,6 +454,77 @@ def scenario_lifetime_minutes(db) -> None:
     check("survives a strike", n.row.lifetime_minutes, before)
 
 
+class FakeDelegation:
+    """Stands in for a Delegation row where only the split maths is under test."""
+    def __init__(self, delegator, amount):
+        self.delegator, self.amount = delegator, amount
+
+
+def scenario_delegation_split(db) -> None:
+    print("\n[15] earnings split with delegators, stake-weighted")
+    # 1000 self, 1000 delegated -> half the earnings follow delegated stake,
+    # and the operator takes commission on that half.
+    op_share, shares = split_earnings(100.0, 1000.0, [FakeDelegation("0xD", 1000.0)])
+    expected_delegator = 100.0 * 0.5 * (1 - OPERATOR_COMMISSION)
+    check("delegator gets its stake share minus commission",
+          round(shares["0xD"], 6), round(expected_delegator, 6))
+    check("operator keeps the rest", round(op_share, 6),
+          round(100.0 - expected_delegator, 6))
+    check("nothing is created or lost",
+          round(op_share + sum(shares.values()), 6), 100.0)
+
+    # Two delegators split their portion in proportion to each other.
+    op_share, shares = split_earnings(100.0, 0.0,
+                                      [FakeDelegation("0xA", 750.0), FakeDelegation("0xB", 250.0)])
+    check("split pro-rata between delegators",
+          [round(shares["0xA"], 6), round(shares["0xB"], 6)],
+          [round(100.0 * 0.75 * (1 - OPERATOR_COMMISSION), 6),
+           round(100.0 * 0.25 * (1 - OPERATOR_COMMISSION), 6)])
+    check("operator still earns its commission", round(op_share, 6),
+          round(100.0 * OPERATOR_COMMISSION, 6))
+
+    # No delegators must behave exactly as before the feature existed.
+    op_share, shares = split_earnings(100.0, 1000.0, [])
+    check("undelegated operator keeps everything", op_share, 100.0)
+    check("no delegator entries", shares, {})
+
+    # A delegation that has been fully unbonded is not a delegation.
+    op_share, shares = split_earnings(100.0, 1000.0, [FakeDelegation("0xD", 0.0)])
+    check("zero-balance delegation ignored", op_share, 100.0)
+
+
+def scenario_delegator_settles(db) -> None:
+    print("\n[16] a delegator accrues and lands in the claim tree")
+    _reset(db)
+    db.query(Delegation).delete(); db.commit()
+    node = VirtualNode(db, 0)
+    node.beat(); node.beat()
+
+    delegator = "0x00000000000000000000000000000000000000D1"
+    db.add(Delegation(id=f"{delegator.lower()}:{node.address.lower()}",
+                      delegator=delegator, operator=node.address, amount=1000.0))
+    db.get(Node, node.address).contribution_minutes = 10.0
+    db.commit()
+
+    close_epoch()
+    db.expire_all()
+    row = db.query(Delegation).first()
+    check("delegator earned something", row.cumulative_reward > 0, True)
+    check("operator earned something", db.get(Node, node.address).cumulative_reward > 0, True)
+
+    # DRY mode reports self_stake 0, so all the backing stake is delegated and
+    # the operator keeps only its commission.
+    total = row.cumulative_reward + db.get(Node, node.address).cumulative_reward
+    check("nothing minted along the way", round(total, 6), 10.0)
+    check("delegator got the non-commission part", round(row.cumulative_reward, 6),
+          round(10.0 * (1 - OPERATOR_COMMISSION), 6))
+
+    claims = coord.current_claims()
+    check("delegator has a claim proof",
+          any(k.lower() == delegator.lower() for k in claims), True)
+    db.query(Delegation).delete(); db.commit()
+
+
 def run() -> None:
     init_db()
     db = SessionLocal()
@@ -465,7 +536,8 @@ def run() -> None:
                          scenario_broken_node, scenario_epoch_holdback,
                          scenario_no_double_dispatch, scenario_fresh_node_joins,
                          scenario_work_rewards, scenario_quorum_reward_split,
-                         scenario_strike_voids_work, scenario_lifetime_minutes):
+                         scenario_strike_voids_work, scenario_lifetime_minutes,
+                         scenario_delegation_split, scenario_delegator_settles):
             scenario(db)
     finally:
         db.close()

@@ -41,15 +41,15 @@ export function Security() {
         wallets within seconds. Still, in order:</p>
       <ol>
         <li>Move anything liquid in that wallet to a new one, immediately.</li>
-        <li>Queue your stake for unbonding. It is subject to the 7-day cooldown, so whoever
+        <li>Queue your stake for unbonding. It is subject to the unbonding cooldown, so whoever
           holds the key can also queue it — but they cannot shorten the wait.</li>
         <li>Generate a new wallet, bond it, and point your node at it.</li>
         <li>Run <code>--forget-key</code>, then remove any <code>.env</code> copy and clear the
           key from your shell history.</li>
       </ol>
       <p>Because bonded stake cannot be withdrawn instantly, a leaked operator key is slightly
-        less catastrophic than a leaked hot wallet. Do not rely on that. The cooldown buys you
-        days, not safety.</p>
+        less catastrophic than a leaked hot wallet. Do not rely on that — the cooldown buys you
+        a little time, not safety.</p>
 
       <h2 id="scope">What is actually at risk</h2>
       <p>Being precise, so you can judge it yourself. Your key can: withdraw your unbonded THKT,

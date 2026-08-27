@@ -37,6 +37,13 @@ _STAKING_ABI = [
      "inputs": [{"name": "operator", "type": "address"},
                 {"name": "amount", "type": "uint256"},
                 {"name": "reason", "type": "string"}], "outputs": []},
+    {"name": "delegations", "type": "function", "stateMutability": "view",
+     "inputs": [{"name": "", "type": "address"}, {"name": "", "type": "address"}],
+     "outputs": [{"name": "", "type": "uint256"}]},
+    {"name": "Delegated", "type": "event", "anonymous": False,
+     "inputs": [{"name": "delegator", "type": "address", "indexed": True},
+                {"name": "operator", "type": "address", "indexed": True},
+                {"name": "amount", "type": "uint256", "indexed": False}]},
 ]
 _DISTRIBUTOR_ABI = [
     {"name": "publishRoot", "type": "function", "stateMutability": "nonpayable",
@@ -82,6 +89,53 @@ class ChainBridge:
             return self.distributor.functions.poolBalance().call() / 1e18
         except Exception:  # noqa: BLE001
             return 0.0
+
+    def operator_stake(self, address: str) -> tuple[float, float]:
+        """(self_stake, delegated_stake) in THKT for one operator."""
+        if self.dry:
+            return (0.0, 0.0)
+        try:
+            _, self_stake, delegated, _ = self.staking.functions.operators(
+                Web3.to_checksum_address(address)).call()
+            return (self_stake / 1e18, delegated / 1e18)
+        except Exception:  # noqa: BLE001
+            return (0.0, 0.0)
+
+    def delegation_of(self, delegator: str, operator: str) -> float:
+        """Current delegated THKT for one (delegator, operator) pair.
+
+        The authoritative number. Event history alone can't give it:
+        `unbondDelegation` emits UnbondQueued without saying which operator the
+        stake came out of, so a delegator's balance can't be replayed from logs.
+        Events are only used to *discover* pairs; this call is the truth.
+        """
+        if self.dry:
+            return 0.0
+        try:
+            return self.staking.functions.delegations(
+                Web3.to_checksum_address(delegator),
+                Web3.to_checksum_address(operator)).call() / 1e18
+        except Exception:  # noqa: BLE001
+            return 0.0
+
+    def find_delegations(self, from_block: int, to_block: int | None = None) -> tuple[list[tuple[str, str]], int]:
+        """Scan Delegated logs for (delegator, operator) pairs.
+
+        Returns (pairs, last_block_scanned). Pairs may repeat and may since have
+        been fully undelegated — the caller re-reads each balance on chain.
+        """
+        if self.dry:
+            return ([], from_block)
+        try:
+            latest = self.w3.eth.block_number if to_block is None else to_block
+            if from_block > latest:
+                return ([], latest)
+            logs = self.staking.events.Delegated().get_logs(
+                from_block=from_block, to_block=latest)
+            pairs = [(ev["args"]["delegator"], ev["args"]["operator"]) for ev in logs]
+            return (pairs, latest)
+        except Exception:  # noqa: BLE001 — RPC log limits, reorgs, provider quirks
+            return ([], from_block)
 
     def verify_payment(self, tx_hash: str, payer: str, min_thkt: float) -> bool:
         """Confirm tx_hash is a successful fund() that paid >= min_thkt into the

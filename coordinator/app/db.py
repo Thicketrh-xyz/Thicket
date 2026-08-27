@@ -95,6 +95,28 @@ class Job(Base):
     price_thkt: Mapped[float] = mapped_column(Float, default=0.0)
 
 
+class Delegation(Base):
+    """One delegator's stake behind one operator, mirrored from the chain.
+
+    The contract's `delegations` mapping isn't enumerable, so the coordinator
+    discovers pairs from Delegated events and then re-reads each balance on
+    chain — `amount` here is a cache of that read, refreshed each epoch, never
+    the source of truth.
+
+    `cumulative_reward` is this delegator's lifetime earnings from this operator.
+    It settles into the same Merkle tree as operator rewards, so a delegator
+    claims exactly the way an operator does.
+    """
+    __tablename__ = "delegations"
+
+    id: Mapped[str] = mapped_column(String(90), primary_key=True)   # delegator:operator
+    delegator: Mapped[str] = mapped_column(String(42), index=True)
+    operator: Mapped[str] = mapped_column(String(42), index=True)
+    amount: Mapped[float] = mapped_column(Float, default=0.0)              # THKT staked
+    cumulative_reward: Mapped[float] = mapped_column(Float, default=0.0)   # THKT owed all-time
+    updated_at: Mapped[float] = mapped_column(Float, default=0.0)
+
+
 class Quorum(Base):
     """One task sent to k nodes so they can be checked against each other."""
     __tablename__ = "quorums"

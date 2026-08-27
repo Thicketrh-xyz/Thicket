@@ -116,7 +116,7 @@ export function StakePanel({ session, notify }) {
             <div className="kv-row"><span className="k">Operator bond</span><span className="v">Slashable</span></div>
             <div className="kv-row"><span className="k">Anti-sybil</span><span className="v">Bond + live challenges</span></div>
             <div className="kv-row"><span className="k">Delegators</span><span className="v">Earn without hardware</span></div>
-            <div className="kv-row"><span className="k">Unbonding</span><span className="v">7-day cooldown</span></div>
+            <div className="kv-row"><span className="k">Unbonding</span><span className="v">cooldown before withdrawal</span></div>
           </div>
           <p className="panel__hint" style={{ marginTop: 16, marginBottom: 0 }}>
             A node that fails its challenges has its earnings voided and, on repeated failure, its bond slashed.

@@ -77,11 +77,14 @@ curl ${COORD}/node/0xYOUR_ADDRESS`}</div>
         records it and it becomes claimable when compute payments refill the pool.</p>
 
       <h3>I delegated and earned nothing</h3>
-      <p>That's the current behaviour, not a bug. Delegation does not pay. See{" "}
-        <a href="/docs/staking">Staking &amp; delegation</a>.</p>
+      <p>Delegated stake is read from the chain at each epoch close, so a fresh delegation
+        earns from the <em>next</em> settlement, not the one in progress. If it still shows
+        zero after that, check <code>{`GET /delegations/{address}`}</code> — an operator that
+        was offline, or had a window voided by a failed challenge, earned nothing that epoch
+        and so paid its delegators nothing. Your stake is unaffected either way.</p>
 
       <h3>I unbonded — where is my THKT?</h3>
-      <p>Queued for 7 days, then withdrawable. Unbonding below the 1,000 minimum also unregisters
+      <p>Queued for the unbonding cooldown, then withdrawable. Unbonding below the 1,000 minimum also unregisters
         your operator record on-chain, so re-register before running a node again.</p>
 
       <h2 id="wallet">Wallet and network</h2>

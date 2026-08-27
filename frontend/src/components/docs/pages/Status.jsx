@@ -32,13 +32,13 @@ export function Status() {
         <li><strong>Real AI jobs</strong> — text and vision through Ollama, routed only to nodes that can run them.</li>
         <li><strong>Paid compute</strong> — priced by size, verified on-chain before the work starts, single jobs and bulk batches.</li>
         <li><strong>Work-based rewards</strong> — operators earn uptime plus a share of what buyers paid for jobs they completed.</li>
+        <li><strong>Delegation rewards</strong> — delegators earn a stake-weighted share of their operator's earnings, minus the operator's commission, claimed from the same root.</li>
         <li><strong>Epoch settlement and claims</strong> — a cumulative Merkle root per epoch, claimed in one transaction.</li>
         <li><strong>Agent SDK</strong> — buy compute from a wallet in one call, with spend guards.</li>
       </ul>
 
       <h2 id="not">What does not work, or is not there</h2>
       <ul>
-        <li><strong>Delegation earns nothing.</strong> The contract tracks delegated stake, but no rewards flow to delegators — there is no commission split implemented. See <a href="/docs/staking">Staking</a>.</li>
         <li><strong>The bond is only checked at registration.</strong> An operator who unbonds afterwards keeps earning until the coordinator restarts. A real hole in the anti-sybil model.</li>
         <li><strong>Operators cannot refuse jobs.</strong> Whatever a buyer sends runs on their machine. There is no content policy and no opt-out.</li>
         <li><strong>Most work is not verified.</strong> Only a sampled share of paid jobs is cross-checked; the rest is policed by the risk of being sampled. Spot-checking, not proof.</li>

@@ -24,9 +24,11 @@ from sqlalchemy.orm import Session
 from . import quorum as qm
 from . import signing
 from .challenge import make_challenge, verify as verify_challenge
-from .db import Batch, Counter, Job, Node, Quorum, QuorumResult, SessionLocal, init_db
-from .epoch import (EPOCH_SECONDS, REWARD_PER_MINUTE, chain_bridge, close_epoch,
-                    current_claims, schedule, start_scheduler)
+from .db import (Batch, Counter, Delegation, Job, Node, Quorum, QuorumResult,
+                 SessionLocal, init_db)
+from .epoch import (EPOCH_SECONDS, OPERATOR_COMMISSION, REWARD_PER_MINUTE, chain_bridge,
+                    close_epoch, current_claims, schedule, start_scheduler,
+                    sync_delegations)
 
 app = FastAPI(title="Thicket Coordinator", version="0.3.0")
 
@@ -852,6 +854,47 @@ def admin_reset(token: str = "", db: Session = Depends(get_db)):
     j = db.query(Job).delete()
     db.commit()
     return {"ok": True, "nodes_cleared": n, "jobs_cleared": j}
+
+
+@app.get("/delegations/{address}")
+def delegations_of(address: str, db: Session = Depends(get_db)):
+    """What this wallet has delegated, and what it has earned doing so.
+
+    Delegators are paid out of the same Merkle root as operators, so the claim
+    proof here is used exactly like a node's.
+    """
+    rows = (db.query(Delegation)
+              .filter(func.lower(Delegation.delegator) == address.lower())
+              .all())
+    settled = sum(r.cumulative_reward for r in rows)
+
+    claim = None
+    for k, v in current_claims().items():
+        if k.lower() == address.lower():
+            claim = v
+            break
+
+    return {
+        "address": address,
+        "commission": OPERATOR_COMMISSION,
+        "delegated_thkt": round(sum(r.amount for r in rows), 6),
+        "earned_thkt": round(settled, 6),
+        "operators": [{"operator": r.operator, "amount": round(r.amount, 6),
+                       "earned_thkt": round(r.cumulative_reward, 6)}
+                      for r in rows if r.amount > 0 or r.cumulative_reward > 0],
+        # Covers this wallet's operator earnings too, if it also runs a node —
+        # one leaf per address, so one proof pays out everything it is owed.
+        "claim": claim,
+    }
+
+
+@app.post("/delegations/sync")
+def delegations_sync(db: Session = Depends(get_db)):
+    """Re-read delegations from chain. Runs each epoch anyway; this is for
+    picking up a fresh delegation without waiting."""
+    n = sync_delegations(db)
+    db.commit()
+    return {"ok": True, "pairs": n}
 
 
 @app.get("/node/{address}")
