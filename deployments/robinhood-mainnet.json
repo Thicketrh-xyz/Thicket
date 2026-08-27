@@ -2,13 +2,20 @@
   "network": "Robinhood Chain Mainnet",
   "chainId": 4663,
   "rpc": "https://rpc.mainnet.chain.robinhood.com/rpc",
+  "explorer": "https://robinhoodchain.blockscout.com",
   "model": "fixed-supply pool (no minting; pool grows from compute revenue + buybacks)",
   "contracts": {
-    "ThicketToken": "0xb935013804172402144cdf34b8f459c7823e7837",
-    "NodeStaking": "0x24d157f09a45d54a0991ed9431c4b838fa32ba66",
-    "RewardsDistributor": "0xca9521b5f46b5018cc7eb2b465967e324806fbab"
+    "ThicketToken": "0xC4F36C7c1D00dcaab1d01159466afa189BFc7161",
+    "NodeStaking": "0xB179254Ca9A5eB59270c6a0088DD46a8a07b9bb9",
+    "RewardsDistributor": "0x1c890110e9cc3dAdeBD6c449437606783B4B682b"
   },
-  "treasury": "0xDad5b9Ff2F03a7Ec05e5551225D166dF890672cE",
+  "treasury": "0xbc0840E56e35A1b333D7Df0D45c70E14343547BD",
   "coordinator_publisher_slasher": "0x15213d78F46cA9C3175fEC8886AD490c145F9339",
-  "openingPoolTHKT": "30000000.000000000000000000"
+  "token": {
+    "name": "Thicket",
+    "symbol": "THKT",
+    "totalSupply": "1000000000",
+    "minOperatorStake": "1000"
+  },
+  "note": "Token launched separately and reused via TOKEN_ADDRESS; the deploy minted nothing."
 }

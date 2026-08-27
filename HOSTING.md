@@ -17,7 +17,7 @@ Only the contracts are live today (Robinhood testnet). This plans the rest.
                                       │ publishRoot / slash / read bonds
                                       ▼
                        ┌─────────────────────────────┐
-                       │  Contracts (Robinhood 46630)│  ✅ already live
+                       │  Contracts (Robinhood 4663) │  ✅ already live
                        └─────────────────────────────┘
 ```
 
@@ -49,15 +49,15 @@ Get it reachable on the internet end-to-end.
 
 **Vercel (frontend, build-time `VITE_*`)**
 ```
-VITE_CHAIN_ID=46630
-VITE_RPC_URL=https://rpc.testnet.chain.robinhood.com/rpc
+VITE_CHAIN_ID=4663
+VITE_RPC_URL=https://rpc.mainnet.chain.robinhood.com/rpc
 VITE_TOKEN_ADDRESS=0xac2763ede29a967b490293f5276ac8042acb35c1
 VITE_STAKING_ADDRESS=0x002497526d249f31f0ba5cb30627228c3b9b4e39
 VITE_DISTRIBUTOR_ADDRESS=0xfe03bc178cff2149e84b4babb399083e31c637e2
 ```
 **Coordinator host (runtime secrets)**
 ```
-ROBINHOOD_RPC=https://rpc.testnet.chain.robinhood.com/rpc
+ROBINHOOD_RPC=https://rpc.mainnet.chain.robinhood.com/rpc
 COORDINATOR_PRIVATE_KEY=0x…            # publisher/slasher (0x14aA…779C) — SECRET
 STAKING_ADDRESS=0x002497526d249f31f0ba5cb30627228c3b9b4e39
 DISTRIBUTOR_ADDRESS=0xfe03bc178cff2149e84b4babb399083e31c637e2
@@ -89,7 +89,7 @@ Decided: **Railway** for the coordinator, **Postgres** for state (no Redis).
 2. Add the **Postgres** plugin. Railway injects `DATABASE_URL` into the service automatically.
 3. Set service variables:
    ```
-   ROBINHOOD_RPC=https://rpc.testnet.chain.robinhood.com/rpc
+   ROBINHOOD_RPC=https://rpc.mainnet.chain.robinhood.com/rpc
    COORDINATOR_PRIVATE_KEY=0x…            # publisher/slasher — SECRET
    STAKING_ADDRESS=0x002497526d249f31f0ba5cb30627228c3b9b4e39
    DISTRIBUTOR_ADDRESS=0xfe03bc178cff2149e84b4babb399083e31c637e2
@@ -107,8 +107,8 @@ Decided: **Railway** for the coordinator, **Postgres** for state (no Redis).
    (`vercel.json` already sets build `npm run build` → `dist`.)
 2. Set Environment Variables (from `deployments/robinhood-testnet.json`):
    ```
-   VITE_CHAIN_ID=46630
-   VITE_RPC_URL=https://rpc.testnet.chain.robinhood.com/rpc
+   VITE_CHAIN_ID=4663
+   VITE_RPC_URL=https://rpc.mainnet.chain.robinhood.com/rpc
    VITE_TOKEN_ADDRESS=0xac2763ede29a967b490293f5276ac8042acb35c1
    VITE_STAKING_ADDRESS=0x002497526d249f31f0ba5cb30627228c3b9b4e39
    VITE_DISTRIBUTOR_ADDRESS=0xfe03bc178cff2149e84b4babb399083e31c637e2

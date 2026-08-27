@@ -89,7 +89,7 @@ res = t.run(prompt, max_price=25)     # never spend more than 25 THKT
   still finish — poll `GET /jobs/{id}`.
 - **Images**: vision models can't decode every format (WebP notably fails). With
   Pillow installed the SDK converts and downscales automatically.
-- **Network**: defaults to Robinhood Chain testnet. Override `coordinator`, `rpc`,
+- **Network**: defaults to Robinhood Chain (mainnet). Override `coordinator`, `rpc`,
   `token`, `distributor` in the constructor to point elsewhere.
 
 Full flow, if you'd rather call the API directly: approve THKT → `fund()` on the

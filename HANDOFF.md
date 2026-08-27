@@ -18,15 +18,15 @@ jobs paid for with real on-chain THKT.
 | Site | https://thicketrh.xyz — landing, `/app` portal, `/docs` |
 | Coordinator | https://thicket-production.up.railway.app (Railway + Postgres) |
 | Repo | https://github.com/Thicketrh-xyz/Thicket (public, MIT) |
-| Chain | Robinhood Chain **testnet**, chain ID `46630` |
+| Chain | Robinhood Chain **mainnet**, chain ID `4663` |
 
 **Contracts** (fixed-supply pool model — no minting):
 
 | Contract | Address |
 |---|---|
-| THKT token | `0x4D4837ddb309a8dCeC3Abe727dbfED584771aEE2` (1B fixed) |
-| NodeStaking | `0x434A64884B7C373eE145f11Ac9b7393723Ee5059` |
-| RewardsDistributor | `0xD5afab6f1d786be0fad6281b9c842D0662Fa88e5` (350M pool) |
+| THKT token | `0xC4F36C7c1D00dcaab1d01159466afa189BFc7161` (1B fixed) |
+| NodeStaking | `0xB179254Ca9A5eB59270c6a0088DD46a8a07b9bb9` |
+| RewardsDistributor | `0x1c890110e9cc3dAdeBD6c449437606783B4B682b` (pool opens low, grows) |
 
 Treasury / publisher / slasher: `0x249d3652A487a116cFa39B7B0D1a2f1A020Ec860` (holds 650M THKT).
 Railway's `COORDINATOR_PRIVATE_KEY` **must** be this wallet's key — it's the only address

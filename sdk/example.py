@@ -9,7 +9,7 @@ print(f"balance {t.balance():.2f} THKT")
 print(f"network serves {t.capabilities()}")
 
 # Always quotable before you commit anything.
-headline = "Robinhood Chain announces a new testnet upgrade for developers."
+headline = "Robinhood Chain announces a new upgrade for developers."
 print(f"quote: {t.quote(headline)} THKT")
 
 try:

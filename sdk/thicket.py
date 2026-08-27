@@ -25,9 +25,9 @@ import requests
 from web3 import Web3
 
 COORDINATOR = "https://thicket-production.up.railway.app"
-RPC = "https://rpc.testnet.chain.robinhood.com/rpc"
-TOKEN = "0x4D4837ddb309a8dCeC3Abe727dbfED584771aEE2"
-DISTRIBUTOR = "0xD5afab6f1d786be0fad6281b9c842D0662Fa88e5"
+RPC = "https://rpc.mainnet.chain.robinhood.com/rpc"
+TOKEN = "0xC4F36C7c1D00dcaab1d01159466afa189BFc7161"
+DISTRIBUTOR = "0x1c890110e9cc3dAdeBD6c449437606783B4B682b"
 
 _ERC20 = [
     {"name": "approve", "type": "function", "stateMutability": "nonpayable",
