@@ -330,7 +330,7 @@ export default function Home() {
           <p className="evidence__intro">Thicket is growing in public. Each capability is clearly labelled, documented, and connected to its current network state.</p>
           <div className="evidence-grid">
             <a href="https://www.thicketrh.xyz/docs/run-a-node" className="evidence-card"><Cpu size={21} /><div><span className="pill pill--live">TESTNET</span><h3>Node client</h3><p>Run and contribute from your own hardware.</p></div><ArrowUpRight size={18} /></a>
-            <a href="https://www.thicketrh.xyz/docs" className="evidence-card"><Signal size={21} /><div><span className="pill pill--live">ENABLED</span><h3>Verification challenges</h3><p>Periodic checks validate useful computation.</p></div><ArrowUpRight size={18} /></a>
+            <a href="https://www.thicketrh.xyz/docs/verification" className="evidence-card"><Signal size={21} /><div><span className="pill pill--live">ENABLED</span><h3>Verification challenges</h3><p>Periodic checks validate useful computation.</p></div><ArrowUpRight size={18} /></a>
             <a href="https://www.thicketrh.xyz/app" className="evidence-card"><Zap size={21} /><div><span className="pill pill--live">ON-CHAIN</span><h3>Reward claims</h3><p>Verified minutes settle each epoch.</p></div><ArrowUpRight size={18} /></a>
             <a href="https://github.com/Thicketrh-xyz/Thicket" className="evidence-card"><Github size={21} /><div><span className="pill pill--open">OPEN</span><h3>Build in public</h3><p>Explore the code, docs, and implementation.</p></div><ArrowUpRight size={18} /></a>
           </div>
@@ -349,7 +349,7 @@ export default function Home() {
               </article>
             ))}
           </div>
-          <div className="roadmap__footer"><span>LAST UPDATED / AUGUST 2026</span><a href="https://www.thicketrh.xyz/docs">Read the full roadmap <ArrowUpRight size={16} /></a></div>
+          <div className="roadmap__footer"><span>LAST UPDATED / AUGUST 2026</span><a href="https://www.thicketrh.xyz/docs/status">See what's live now <ArrowUpRight size={16} /></a></div>
         </section>
 
         <section className="final-cta">
