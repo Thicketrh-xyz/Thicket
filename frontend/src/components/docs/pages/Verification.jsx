@@ -13,10 +13,10 @@ export function Verification() {
       <p>All of these are coordinator settings and can change; the live values are the ones the coordinator is running with, not necessarily the defaults below.</p>
       <table className="docs-table">
         <tbody>
-          <tr><th>Heartbeat</th><td>Every 30s by default. Miss <strong>90s</strong> and you count as offline — the gap earns nothing, and time only accrues <em>between</em> two heartbeats.</td></tr>
+          <tr><th>Heartbeat</th><td>Every 30s by default. Miss <strong>90s</strong> and you count as offline the gap earns nothing, and time only accrues <em>between</em> two heartbeats.</td></tr>
           <tr><th>Challenge interval</th><td>About every <strong>10 minutes</strong> per node.</td></tr>
-          <tr><th>Challenge deadline</th><td><strong>60s</strong> to answer. Missing it is treated as <em>absent</em>, not wrong — no strike.</td></tr>
-          <tr><th>Wrong answer</th><td>Voids <strong>everything unsettled</strong> in that window — both minutes online and work earnings — and adds a strike.</td></tr>
+          <tr><th>Challenge deadline</th><td><strong>60s</strong> to answer. Missing it is treated as <em>absent</em>, not wrong, no strike.</td></tr>
+          <tr><th>Wrong answer</th><td>Voids <strong>everything unsettled</strong> in that window both minutes online and work earnings and adds a strike.</td></tr>
           <tr><th>Slash threshold</th><td><strong>3 strikes</strong>. A passed challenge resets the counter, so the three are effectively consecutive.</td></tr>
           <tr><th>Slash amount</th><td><strong>100 THKT</strong> from self-stake, capped at whatever is staked.</td></tr>
           <tr><th>Epoch</th><td><strong>60s</strong> on the live coordinator. At each close the coordinator publishes one cumulative Merkle root on-chain.</td></tr>
@@ -27,7 +27,7 @@ export function Verification() {
       <h3>What a strike actually costs</h3>
       <p>Three separate things happen when a node is found to have answered wrongly:</p>
       <ol>
-        <li><strong>The window is voided.</strong> Everything unsettled — minutes online <em>and</em> work earnings — is zeroed. Anything already settled into a published root is safe; the contract has it and it cannot be revoked off-chain.</li>
+        <li><strong>The window is voided.</strong> Everything unsettled, minutes online, <em>and</em> work earnings is zeroed. Anything already settled into a published root is safe; the contract has it and it cannot be revoked off-chain.</li>
         <li><strong>A strike is recorded.</strong> Passing a later challenge resets the counter to zero, so the three that trigger a slash are effectively consecutive.</li>
         <li><strong>At three strikes, the bond is slashed.</strong> 100 THKT moves out of your self-stake to the treasury, capped at whatever you have staked. The counter then resets.</li>
       </ol>
