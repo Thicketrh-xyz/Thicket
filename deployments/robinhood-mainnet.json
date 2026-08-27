@@ -1,0 +1,14 @@
+{
+  "network": "Robinhood Chain Mainnet",
+  "chainId": 4663,
+  "rpc": "https://rpc.mainnet.chain.robinhood.com/rpc",
+  "model": "fixed-supply pool (no minting; pool grows from compute revenue + buybacks)",
+  "contracts": {
+    "ThicketToken": "0xb935013804172402144cdf34b8f459c7823e7837",
+    "NodeStaking": "0x24d157f09a45d54a0991ed9431c4b838fa32ba66",
+    "RewardsDistributor": "0xca9521b5f46b5018cc7eb2b465967e324806fbab"
+  },
+  "treasury": "0xDad5b9Ff2F03a7Ec05e5551225D166dF890672cE",
+  "coordinator_publisher_slasher": "0x15213d78F46cA9C3175fEC8886AD490c145F9339",
+  "openingPoolTHKT": "30000000.000000000000000000"
+}

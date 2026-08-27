@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Script, console2} from "forge-std/Script.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ThicketToken} from "../src/ThicketToken.sol";
 import {NodeStaking} from "../src/NodeStaking.sol";
 import {RewardsDistributor} from "../src/RewardsDistributor.sol";
@@ -14,7 +15,8 @@ import {RewardsDistributor} from "../src/RewardsDistributor.sol";
 /// Env:
 ///   PRIVATE_KEY          deployer/treasury key (holds the full supply at launch)
 ///   COORDINATOR_ADDRESS  publisher + slasher (defaults to deployer)
-///   TOTAL_SUPPLY         full fixed supply       (default 1,000,000,000 THKT)
+///   TOKEN_ADDRESS        EXISTING THKT to use    (unset = deploy a new token)
+///   TOTAL_SUPPLY         full fixed supply       (only when minting a new one)
 ///   REWARDS_POOL         pool's OPENING balance  (default    30,000,000 THKT)
 ///   MIN_OPERATOR_STAKE   node bond               (default         1,000 THKT)
 ///
@@ -36,12 +38,30 @@ contract Deploy is Script {
         uint256 minStake = vm.envOr("MIN_OPERATOR_STAKE", uint256(1_000 ether));
         address coordinator = vm.envOr("COORDINATOR_ADDRESS", treasury);
 
-        require(rewardsPool <= totalSupply, "REWARDS_POOL > TOTAL_SUPPLY");
+        // TOKEN_ADDRESS set  -> use that token, deploy nothing new.
+        // TOKEN_ADDRESS unset -> mint a fresh fixed-supply token.
+        //
+        // The token in this repo is a stand-in. If THKT is issued anywhere else
+        // — a launchpad, an earlier deploy — pass its address, or this script
+        // creates a SECOND token with the same name and wires staking and
+        // rewards to the one nobody holds.
+        address existingToken = vm.envOr("TOKEN_ADDRESS", address(0));
+
+        if (existingToken == address(0)) {
+            require(rewardsPool <= totalSupply, "REWARDS_POOL > TOTAL_SUPPLY");
+        } else {
+            // Can't mint what we don't control: the treasury has to already hold
+            // enough of the real token to seed the pool.
+            uint256 held = IERC20(existingToken).balanceOf(treasury);
+            require(held >= rewardsPool, "treasury holds less THKT than REWARDS_POOL");
+        }
 
         vm.startBroadcast(pk);
 
-        // Fixed supply minted once to treasury (mirrors the launchpad token).
-        ThicketToken token = new ThicketToken(totalSupply, treasury);
+        IERC20 token = existingToken == address(0)
+            ? IERC20(address(new ThicketToken(totalSupply, treasury)))
+            : IERC20(existingToken);
+
         NodeStaking staking = new NodeStaking(token, minStake, treasury);
         RewardsDistributor dist = new RewardsDistributor(token, treasury);
 
@@ -55,6 +75,9 @@ contract Deploy is Script {
         vm.stopBroadcast();
 
         console2.log("== Thicket deployed (pool model) ==");
+        console2.log(existingToken == address(0)
+            ? "THKT token          : NEWLY DEPLOYED"
+            : "THKT token          : existing, reused");
         console2.log("THKT token          :", address(token));
         console2.log("NodeStaking         :", address(staking));
         console2.log("RewardsDistributor  :", address(dist));

@@ -44,6 +44,33 @@ bad reward roots, not the pool.
 
 Fund the deployer with mainnet gas — the deploy is roughly 2.1M gas.
 
+## The short version
+
+Steps 2-6 below are wrapped in one script, with the preflight checks and the
+on-chain verification built in rather than left as a checklist:
+
+```bash
+export MAINNET_RPC="https://…"
+export PRIVATE_KEY=0x…
+export COORDINATOR_ADDRESS=0x…
+
+./scripts/deploy-mainnet.sh              # simulates, sends nothing
+./scripts/deploy-mainnet.sh --broadcast  # deploys for real
+```
+
+It refuses to run against chain 46630 or an RPC with "testnet" in it, refuses if
+`COORDINATOR_ADDRESS` is unset or equals the deployer, checks the deployer has
+gas, then after deploying reads `publisher` and `slasher` back off chain and
+fails if they aren't the coordinator. It writes `frontend/.env`,
+`coordinator/.env` and `deployments/robinhood-mainnet.json`, and prints what is
+left to do by hand.
+
+Steps 7 and 8 — Railway, Vercel, and handing ownership to a multisig — are still
+manual by design.
+
+The rest of this page is the same sequence step by step, for when you want to see
+what it is doing.
+
 ## 2. Set the deploy parameters
 
 ```bash

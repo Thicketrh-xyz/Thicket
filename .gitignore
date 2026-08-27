@@ -26,3 +26,7 @@ node/src-tauri/target/
 
 # design reference (local only)
 reference/
+
+# Operational runbooks — local only, not for the public repo
+MAINNET.md
+scripts/deploy-mainnet.sh
