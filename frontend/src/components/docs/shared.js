@@ -15,7 +15,7 @@ export const NAV = [
   { href: "/", label: "Home" },
   { href: "/#verification", label: "How it works" },
   { href: "/#roadmap", label: "Roadmap" },
-  { href: "/app", label: "Portal" },
+  { href: "/app", label: "App" },
 ];
 
 // The docs are one page per slug. `""` is /docs itself.
