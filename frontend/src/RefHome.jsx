@@ -113,7 +113,7 @@ const roadmap = [
   {
     state: "LATER",
     stage: "Canopy",
-    items: ["Multi-modality", "Model tokenization", "Mainnet + economics"],
+    items: ["Multi-modality", "Model tokenization"],
   },
 ];
 
