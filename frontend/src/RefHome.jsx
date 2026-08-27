@@ -102,7 +102,7 @@ const roadmap = [
     state: "CURRENT",
     stage: "Sprout",
     items: ["Coordinator + heartbeats", "Verifiable challenges", "Model runtime · text + vision",
-            "Redundant verification", "Work-based rewards", "Node client · testnet"],
+            "Redundant verification", "Work-based rewards", "Node client", "Mainnet launch"],
   },
   {
     state: "NEXT",
@@ -321,7 +321,7 @@ export default function Home() {
           </div>
           <div className="terminal-card">
             <div className="terminal-card__bar"><span /><span /><span /><small>thicket-runtime / request</small></div>
-            <pre><code><b>POST</b> /v1/inference{`\n`}{`{\n`}  <i>"model"</i>: <em>"edge/vision-preview"</em>,{`\n`}  <i>"verification"</i>: <em>true</em>,{`\n`}  <i>"network"</i>: <em>"thicket-testnet"</em>{`\n`}{`}`}</code></pre>
+            <pre><code><b>POST</b> /v1/inference{`\n`}{`{\n`}  <i>"model"</i>: <em>"edge/vision-preview"</em>,{`\n`}  <i>"verification"</i>: <em>true</em>,{`\n`}  <i>"network"</i>: <em>"robinhood-chain"</em>{`\n`}{`}`}</code></pre>
             <div className="terminal-card__result"><span><Activity size={15} /> Routing workload</span><strong>3 eligible nodes</strong><span className="terminal-card__verified"><CircleCheck size={15} /> Verification required</span></div>
           </div>
         </section>
@@ -330,7 +330,7 @@ export default function Home() {
           <div className="evidence__heading"><SectionLabel>NETWORK TRANSPARENCY</SectionLabel><h2>See the network <em>working.</em></h2></div>
           <p className="evidence__intro">Thicket is growing in public. Each capability is clearly labelled, documented, and connected to its current network state.</p>
           <div className="evidence-grid">
-            <a href="https://www.thicketrh.xyz/docs/run-a-node" className="evidence-card"><Cpu size={21} /><div><span className="pill pill--live">TESTNET</span><h3>Node client</h3><p>Run and contribute from your own hardware.</p></div><ArrowUpRight size={18} /></a>
+            <a href="https://www.thicketrh.xyz/docs/run-a-node" className="evidence-card"><Cpu size={21} /><div><span className="pill pill--live">LIVE</span><h3>Node client</h3><p>Run and contribute from your own hardware.</p></div><ArrowUpRight size={18} /></a>
             <a href="https://www.thicketrh.xyz/docs/verification" className="evidence-card"><Signal size={21} /><div><span className="pill pill--live">ENABLED</span><h3>Verification challenges</h3><p>Periodic checks validate useful computation.</p></div><ArrowUpRight size={18} /></a>
             <a href="https://www.thicketrh.xyz/app" className="evidence-card"><Zap size={21} /><div><span className="pill pill--live">ON-CHAIN</span><h3>Reward claims</h3><p>Verified minutes settle each epoch.</p></div><ArrowUpRight size={18} /></a>
             <a href="https://github.com/Thicketrh-xyz/Thicket" className="evidence-card"><Github size={21} /><div><span className="pill pill--open">OPEN</span><h3>Build in public</h3><p>Explore the code, docs, and implementation.</p></div><ArrowUpRight size={18} /></a>

@@ -9,19 +9,19 @@ export function Status() {
       <h2 id="network">The network</h2>
       <table className="docs-table">
         <tbody>
-          <tr><th>Network</th><td><strong>{NETWORK}</strong> — testnet, not mainnet</td></tr>
+          <tr><th>Network</th><td><strong>{NETWORK}</strong> — mainnet</td></tr>
           <tr><th>Chain ID</th><td><code>{CHAIN_ID}</code></td></tr>
           <tr><th>RPC</th><td><code>{RPC}</code></td></tr>
           <tr><th>Explorer</th><td><a href={EXPLORER}>{EXPLORER.replace("https://", "")}</a></td></tr>
           <tr><th>Coordinator</th><td><a href={`${COORD}/health`}>{COORD.replace("https://", "")}</a></td></tr>
-          <tr><th>Gas</th><td>Testnet ETH, free from a faucet</td></tr>
+          <tr><th>Gas</th><td>ETH on Robinhood Chain</td></tr>
           <tr><th>Audit</th><td><strong>None.</strong> No contract has been audited by anyone</td></tr>
-          <tr><th>Value of THKT</th><td><strong>None.</strong> Testnet tokens are not money</td></tr>
+          <tr><th>Value of THKT</th><td>THKT is live. Treat it as real value and act accordingly</td></tr>
         </tbody>
       </table>
-      <p>There is no Thicket mainnet. There are no mainnet contract addresses. If you encounter
-        a site, token, or "Thicket mainnet" that says otherwise, treat it as a scam and check it
-        against <a href="https://github.com/Thicketrh-xyz/Thicket">the repository</a>.</p>
+      <p>These are the only official addresses. Any other token claiming to be THKT is not ours —
+        check anything you are unsure about against
+        <a href="https://github.com/Thicketrh-xyz/Thicket">the repository</a> before sending funds.</p>
 
       <h2 id="working">What works end to end</h2>
       <ul>
@@ -50,10 +50,10 @@ export function Status() {
       <h2 id="honest">The short version</h2>
       <p>The compute is real — actual models producing actual output, paid for with real on-chain
         transactions on a test network. The verification is real but partial. The economics are
-        real but unproven, and the whole thing runs on testnet with unaudited contracts and a
-        coordinator key that could, today, assign the entire rewards pool to itself.</p>
-      <p>It is a working system worth running and worth reading. It is not something to put money
-        behind, and nothing on this site should be read as inviting you to.</p>
+        real but unproven, and it runs on unaudited contracts with an owner key that can move the
+        entire rewards pool in one transaction.</p>
+      <p>It is a working system, live on mainnet, and it is early. Nothing here has been audited.
+        Judge it on what this page says rather than on anything more confident you read elsewhere.</p>
     </>
   );
 }

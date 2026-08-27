@@ -8,7 +8,7 @@ export function hasWallet() {
   return typeof window !== "undefined" && !!window.ethereum;
 }
 
-// Ensure the wallet is on Robinhood Chain Testnet — switch, or add it if unknown.
+// Ensure the wallet is on Robinhood Chain — switch, or add it if unknown.
 export async function ensureNetwork() {
   if (!hasWallet()) return;
   const { chainIdHex, chainName, rpcUrls, blockExplorerUrls, nativeCurrency } = config.chain;

@@ -29,7 +29,7 @@ Nodes    ──▶  client    ──────────┘`}</div>
           <tr><td>Buyer payments into the pool</td><td>&nbsp;</td></tr>
         </tbody>
       </table>
-      <p>The coordinator is a <strong>single trusted service</strong>. It decides what everyone earns and it holds the key that publishes roots and issues slashes. That key can publish any root it likes, so it could in principle assign the pool to itself. Nothing on-chain prevents that today — it is the largest piece of trust in the system and the reason a multisig on that key is a prerequisite for anything beyond testnet.</p>
+      <p>The coordinator is a <strong>single trusted service</strong>. It decides what everyone earns and it holds the key that publishes roots and issues slashes. That key can publish any root it likes, so it could in principle assign the pool to itself. Nothing on-chain prevents that today — it is the largest piece of trust in the system, and putting that key behind a multisig is the single most important thing still outstanding.</p>
 
 
       <h3>Why a coordinator at all</h3>

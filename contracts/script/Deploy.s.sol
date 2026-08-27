@@ -69,8 +69,12 @@ contract Deploy is Script {
         staking.setSlasher(coordinator);  // coordinator slashes failed operators
 
         // Seed the rewards pool. This is an opening balance, not the target —
-        // compute payments and buybacks top it up from here.
-        token.transfer(address(dist), rewardsPool);
+        // compute payments and buybacks top it up from here. Zero is a normal
+        // choice: deploy the contracts now, fund the pool later by transferring
+        // THKT straight to the distributor address.
+        if (rewardsPool > 0) {
+            token.transfer(address(dist), rewardsPool);
+        }
 
         vm.stopBroadcast();
 

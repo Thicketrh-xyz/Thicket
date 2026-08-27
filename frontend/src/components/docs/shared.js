@@ -1,13 +1,13 @@
 // Values every docs page quotes. One definition, so a network change is a
 // single edit rather than a hunt through prose.
-export const RPC = "https://rpc.testnet.chain.robinhood.com/rpc";
-export const EXPLORER = "https://explorer.testnet.chain.robinhood.com";
-export const CHAIN_ID = 46630;
-export const NETWORK = "Robinhood Chain Testnet";
+export const RPC = "https://rpc.mainnet.chain.robinhood.com/rpc";
+export const EXPLORER = "https://robinhoodchain.blockscout.com";
+export const CHAIN_ID = 4663;
+export const NETWORK = "Robinhood Chain";
 export const COORD = "https://thicket-production.up.railway.app";
-export const TOKEN = "0x4D4837ddb309a8dCeC3Abe727dbfED584771aEE2";
-export const STAKING = "0x434A64884B7C373eE145f11Ac9b7393723Ee5059";
-export const DIST = "0xD5afab6f1d786be0fad6281b9c842D0662Fa88e5";
+export const TOKEN = "0xC4F36C7c1D00dcaab1d01159466afa189BFc7161";
+export const STAKING = "0xB179254Ca9A5eB59270c6a0088DD46a8a07b9bb9";
+export const DIST = "0x1c890110e9cc3dAdeBD6c449437606783B4B682b";
 export const REPO = "https://github.com/Thicketrh-xyz/Thicket";
 export const PORTAL = "/app";
 

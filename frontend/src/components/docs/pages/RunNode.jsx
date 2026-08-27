@@ -4,7 +4,7 @@ export function RunNode() {
   return (
     <>
       <h2 id="run-a-node">Run a node</h2>
-      <p>You need a wallet holding <strong>1,000 THKT</strong> (the operator bond) plus a little testnet ETH for gas.</p>
+      <p>You need a wallet holding <strong>1,000 THKT</strong> (the operator bond) plus a little ETH for gas.</p>
 
       <h3>What you need</h3>
       <table className="docs-table">
@@ -27,7 +27,7 @@ cd Thicket/node
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`}</div>
 
       <h3>2. Need a wallet? Make one</h3>
-      <p>Skip this if you already have one. Save what it prints, then send that address 1,000+ THKT and a little testnet ETH.</p>
+      <p>Skip this if you already have one. Save what it prints, then send that address 1,000+ THKT and a little ETH for gas.</p>
       <div className="code">{`.venv/bin/python -m thicket_node.client --new-wallet`}</div>
 
       <h3>3. Save your key once</h3>

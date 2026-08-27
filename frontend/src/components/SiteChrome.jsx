@@ -89,7 +89,7 @@ export function SiteFooter() {
       <div className="footer__brand">
         <BrandMark />
         <p>A decentralized GPU network. Grow the thicket, earn from your compute.</p>
-        <div className="footer__status"><span /> TESTNET OPERATIONAL</div>
+        <div className="footer__status"><span /> MAINNET OPERATIONAL</div>
       </div>
       <div className="footer__links">
         <div>

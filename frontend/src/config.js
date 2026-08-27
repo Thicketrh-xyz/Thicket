@@ -1,5 +1,5 @@
 // Thicket frontend config. Fill addresses after deploying to Robinhood Chain.
-const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || 46630); // Robinhood Chain Testnet
+const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || 4663); // Robinhood Chain
 
 export const config = {
   // Dev: "/api" is proxied to localhost:8000 (vite.config.js).
@@ -8,10 +8,10 @@ export const config = {
   coordinatorBase: import.meta.env.VITE_COORDINATOR_URL || "/api",
   chain: {
     chainId: CHAIN_ID,
-    chainIdHex: "0x" + CHAIN_ID.toString(16), // 46630 -> 0xb626
-    chainName: "Robinhood Chain Testnet",
-    rpcUrls: [import.meta.env.VITE_RPC_URL || "https://rpc.testnet.chain.robinhood.com/rpc"],
-    blockExplorerUrls: ["https://explorer.testnet.chain.robinhood.com"],
+    chainIdHex: "0x" + CHAIN_ID.toString(16), // 4663 -> 0x1237
+    chainName: "Robinhood Chain",
+    rpcUrls: [import.meta.env.VITE_RPC_URL || "https://rpc.mainnet.chain.robinhood.com/rpc"],
+    blockExplorerUrls: ["https://robinhoodchain.blockscout.com"],
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   },
   contracts: {

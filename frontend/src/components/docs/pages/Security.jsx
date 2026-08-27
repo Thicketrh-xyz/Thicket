@@ -56,8 +56,7 @@ export function Security() {
         queue your stake for unbonding, sign heartbeats as your node, and claim your settled
         rewards. It cannot: publish reward roots, slash anyone, or touch the rewards pool —
         those need the coordinator's key, which is a different wallet entirely.</p>
-      <p>On testnet none of this is worth money. Build the habit now anyway, because the same
-        commands and the same key handling are what you would use if it ever were.</p>
+      <p>THKT is live, so this is real value. Handle the key accordingly.</p>
     </>
   );
 }

@@ -33,7 +33,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`}</div>
             <div className="n">2</div>
             <div>
               <h4>Need a wallet? Make one</h4>
-              <p>Then send it 1,000+ THKT (the bond) and a little testnet ETH for gas.</p>
+              <p>Then send it 1,000+ THKT (the bond) and a little ETH for gas.</p>
               <div className="code">{`.venv/bin/python -m thicket_node.client --new-wallet`}</div>
             </div>
           </div>

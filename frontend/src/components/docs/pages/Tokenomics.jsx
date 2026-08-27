@@ -1,4 +1,4 @@
-import { DIST, RPC, STAKING, TOKEN } from "../shared";
+import { CHAIN_ID, DIST, EXPLORER, RPC, STAKING, TOKEN } from "../shared";
 
 export function Tokenomics() {
   return (
@@ -9,7 +9,7 @@ export function Tokenomics() {
           <tr><th>Total supply</th><td>1,000,000,000 THKT (fixed)</td></tr>
           <tr><th>Rewards pool target</th><td><strong>350,000,000 THKT</strong> — the size the pool is intended to reach, <em>not</em> a starting balance. It opens far lower and grows; see below.</td></tr>
           <tr><th>Pool balance now</th><td>Whatever the distributor address actually holds. It is shown live at the top of the <a href="/app">portal</a> and returned as <code>pool_thkt</code> by <code>{`GET /stats`}</code> — read it there rather than trusting a number written down here.</td></tr>
-          <tr><th>Uptime rate</th><td>1 THKT per verified minute (testnet)</td></tr>
+          <tr><th>Uptime rate</th><td>1 THKT per verified minute</td></tr>
           <tr><th>Work share</th><td>70% of what the buyer paid, to the node that did the job</td></tr>
           <tr><th>Operator bond</th><td>1,000 THKT minimum</td></tr>
           <tr><th>Refill</th><td>compute-job payments, plus buybacks funded by the team</td></tr>
@@ -37,11 +37,11 @@ export function Tokenomics() {
       <p>Paying operators a share of real revenue rather than an open-ended rate per job is deliberate: the pool is finite, so a rate that scales with demand would be an unbounded claim on it. Uptime is the subsidy that keeps a node worth running before demand exists; work is what should pay once it does.</p>
 
       <h2 id="contracts">Contracts</h2>
-      <p>Network: <strong>Robinhood Chain Testnet</strong> · chain ID <code>46630</code> · gas token ETH.</p>
+      <p>Network: <strong>Robinhood Chain</strong> · chain ID <code>{CHAIN_ID}</code> · gas token ETH.</p>
       <table className="docs-table">
         <tbody>
           <tr><th>RPC</th><td><code>{RPC}</code></td></tr>
-          <tr><th>Explorer</th><td><a href="https://explorer.testnet.chain.robinhood.com">explorer.testnet.chain.robinhood.com</a></td></tr>
+          <tr><th>Explorer</th><td><a href={EXPLORER}>{EXPLORER.replace("https://", "")}</a></td></tr>
           <tr><th>THKT token</th><td><code>{TOKEN}</code></td></tr>
           <tr><th>NodeStaking</th><td><code>{STAKING}</code></td></tr>
           <tr><th>RewardsDistributor</th><td><code>{DIST}</code></td></tr>
