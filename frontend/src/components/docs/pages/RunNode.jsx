@@ -9,9 +9,9 @@ export function RunNode() {
       <h3>What you need</h3>
       <table className="docs-table">
         <tbody>
-          <tr><th>OS</th><td>macOS, Linux, or Windows. Python 3.10+. Tested most on macOS.</td></tr>
-          <tr><th>GPU</th><td>Not required. Uptime and challenges are CPU work. A GPU mainly makes <em>paid jobs</em> faster, which is what earns.</td></tr>
-          <tr><th>RAM</th><td>8GB serves <code>llama3.2:1b</code> text jobs. Vision (<code>llava:7b</code>) wants 16GB. A node sizes its context window to the job — up to 32k tokens on a long document — and that is where memory goes. Lower it with <code>THICKET_MAX_CTX</code>.</td></tr>
+          <tr><th>OS</th><td>macOS, Linux, or Windows. Python 3.10+.</td></tr>
+          <tr><th>GPU</th><td>Not required. Uptime and challenges are CPU work. A GPU makes <em>paid jobs</em> faster.</td></tr>
+          <tr><th>RAM</th><td>8GB serves <code>llama3.2:1b</code> text jobs. Vision (<code>llava:7b</code>) wants 16GB. A node sizes its context window to the job up to 32k tokens on a long document and that is where memory goes. Lower it with <code>THICKET_MAX_CTX</code>.</td></tr>
           <tr><th>Disk</th><td>~2GB for the text model, ~5GB for vision, plus room for Ollama itself.</td></tr>
           <tr><th>Bandwidth</th><td>Light. A heartbeat every 30s and job payloads; a vision job carries a base64 image.</td></tr>
           <tr><th>Uptime</th><td>Miss 90s of heartbeats and you're offline for that gap. No penalty — you just earn nothing for it.</td></tr>
