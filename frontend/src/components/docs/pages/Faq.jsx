@@ -7,8 +7,7 @@ export function Faq() {
       <h3>Is this audited, or on mainnet?</h3>
       <p><strong>No, and no.</strong> Thicket runs on Robinhood Chain <strong>testnet</strong> and
         no contract has been audited. THKT here has no monetary value and testnet gas is free.
-        Nothing you stake is real money. What would have to change is written down in{" "}
-        <a href="/docs/migration">Testnet → mainnet</a>.</p>
+        Nothing you stake is real money.</p>
 
       <h3>Do I need a GPU?</h3>
       <p>No, but memory matters more than you'd think. Uptime and challenges are CPU work. Serving

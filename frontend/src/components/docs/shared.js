@@ -50,7 +50,6 @@ export const PAGES = [
     group: "Reference",
     items: [
       ["tokenomics", "Tokenomics & contracts", "Supply, the pool, and deployed addresses"],
-      ["migration", "Testnet → mainnet", "What has to happen before mainnet is honest"],
       ["troubleshooting", "Troubleshooting", "When something is not working"],
       ["faq", "FAQ", "Short answers"],
     ],

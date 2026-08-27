@@ -13,7 +13,6 @@ import { Compute } from "./docs/pages/Compute";
 import { Sdk } from "./docs/pages/Sdk";
 import { Api } from "./docs/pages/Api";
 import { Tokenomics } from "./docs/pages/Tokenomics";
-import { Migration } from "./docs/pages/Migration";
 import { Troubleshooting } from "./docs/pages/Troubleshooting";
 import { Faq } from "./docs/pages/Faq";
 
@@ -33,7 +32,6 @@ const ROUTES = {
   "sdk": Sdk,
   "api": Api,
   "tokenomics": Tokenomics,
-  "migration": Migration,
   "troubleshooting": Troubleshooting,
   "faq": Faq,
 };
