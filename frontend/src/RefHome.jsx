@@ -107,7 +107,8 @@ const roadmap = [
   {
     state: "NEXT",
     stage: "Sapling",
-    items: ["Desktop node app", "Operator job policy", "Audit + mainnet economics"],
+    items: ["Operator job policy", "Token launch", "Mainnet economics",
+            "Desktop node app", "Audit"],
   },
   {
     state: "LATER",
