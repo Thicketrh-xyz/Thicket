@@ -4,7 +4,7 @@ export function Claiming() {
     <>
       <p>Earnings accrue live but become <strong>claimable</strong> only when an epoch settles — that's when the on-chain Merkle root updates. In the portal, "Earned" ticks up continuously while "Claimable" updates each epoch.</p>
       <div className="code">{`claimable = settled_in_latest_root − already_claimed_on_chain`}</div>
-      <p>Roots are <strong>cumulative</strong>, not per-epoch: each one carries your lifetime total, and the contract pays the difference against what you've already taken. You can skip claiming for weeks and collect once — nothing expires, and there's no advantage to claiming often beyond having the tokens.</p>
+      <p>Roots are <strong>cumulative</strong>, not per-epoch: each one carries your lifetime total, and the contract pays the difference against what you've already taken. You can skip claiming for weeks and collect once — nothing expires, you still have the tokens.</p>
       <p><strong>Why claimable can be zero</strong> when you're clearly earning:</p>
       <ul>
         <li>No epoch has closed since you started — wait one cycle.</li>
