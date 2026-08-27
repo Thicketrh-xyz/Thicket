@@ -165,7 +165,7 @@ def _new_wallet() -> None:
     print(f"  Address     : {acct.address}")
     print(f"  Private key : {key}")
     print()
-    print("Fund it with THKT (for the bond) plus a little testnet ETH (for gas), then run:")
+    print("Fund it with THKT (for the bond) plus a little ETH (for gas), then run:")
     print("  python -m thicket_node.client --key <YOUR_PRIVATE_KEY>")
     print()
 

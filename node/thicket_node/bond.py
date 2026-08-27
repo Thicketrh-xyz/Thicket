@@ -6,7 +6,7 @@ NodeStaking. If not (and bonding is configured), it approves and bonds THKT so
 the coordinator's on-chain `is_bonded` check passes and the operator has real,
 slashable skin in the game.
 
-Requires the node wallet to hold THKT (for the bond) and a little testnet ETH
+Requires the node wallet to hold THKT (for the bond) and a little ETH
 (for gas). If it doesn't, we exit with a clear, actionable message.
 """
 from __future__ import annotations
@@ -84,7 +84,7 @@ def ensure_bonded(cfg, account) -> str:
     if balance < bond:
         raise SystemExit(
             f"[thicket] wallet {addr} holds {_thkt(balance)} THKT but needs {_thkt(bond)} to bond.\n"
-            f"          Send at least {_thkt(bond)} THKT (and a little testnet ETH for gas) to that address, then retry.\n"
+            f"          Send at least {_thkt(bond)} THKT (and a little ETH for gas) to that address, then retry.\n"
             f"          Or set SKIP_BOND=true in node/.env to run without bonding (coordinator must be in DRY mode)."
         )
 

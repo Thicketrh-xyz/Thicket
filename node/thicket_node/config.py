@@ -76,9 +76,9 @@ class Config:
     heartbeat_interval: int = 30
 
     # on-chain bonding (blank addresses => bonding skipped)
-    rpc_url: str = "https://rpc.testnet.chain.robinhood.com/rpc"
-    token_address: str = "0x4D4837ddb309a8dCeC3Abe727dbfED584771aEE2"
-    staking_address: str = "0x434A64884B7C373eE145f11Ac9b7393723Ee5059"
+    rpc_url: str = "https://rpc.mainnet.chain.robinhood.com/rpc"
+    token_address: str = "0xC4F36C7c1D00dcaab1d01159466afa189BFc7161"
+    staking_address: str = "0xB179254Ca9A5eB59270c6a0088DD46a8a07b9bb9"
     bond_amount: str = ""      # human THKT; blank => the contract minimum
     skip_bond: bool = False
 

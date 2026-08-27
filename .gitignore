@@ -30,3 +30,5 @@ reference/
 # Operational runbooks — local only, not for the public repo
 MAINNET.md
 scripts/deploy-mainnet.sh
+.vercel
+.env*
