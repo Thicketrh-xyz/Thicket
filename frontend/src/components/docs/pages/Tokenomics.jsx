@@ -7,7 +7,7 @@ export function Tokenomics() {
       <table className="docs-table">
         <tbody>
           <tr><th>Total supply</th><td>1,000,000,000 THKT (fixed)</td></tr>
-          <tr><th>Rewards pool target</th><td><strong>350,000,000 THKT</strong> — the size the pool is intended to reach, <em>not</em> a starting balance. It grows over time; see below.</td></tr>
+          <tr><th>Rewards pool target</th><td><strong>350,000,000 THKT</strong> — the size the pool is intended to reach, <em>not</em> a starting balance. It opens far lower and grows; see below.</td></tr>
           <tr><th>Pool balance now</th><td>Whatever the distributor address actually holds. It is shown live at the top of the <a href="/app">portal</a> and returned as <code>pool_thkt</code> by <code>{`GET /stats`}</code> — read it there rather than trusting a number written down here.</td></tr>
           <tr><th>Uptime rate</th><td>1 THKT per verified minute (testnet)</td></tr>
           <tr><th>Work share</th><td>70% of what the buyer paid, to the node that did the job</td></tr>
@@ -18,9 +18,10 @@ export function Tokenomics() {
         </tbody>
       </table>
       <h2 id="pool">How the pool grows</h2>
-      <p>350M is a <strong>ceiling, not an opening balance</strong>. The pool fills gradually from
-        two sources, and both move real tokens that already exist — nothing is minted to pay
-        rewards, ever.</p>
+      <p>350M is a <strong>ceiling, not an opening balance</strong>. The pool is seeded with a
+        fraction of that at launch — the rest stays in the treasury — and fills from two
+        sources. Both move real tokens that already exist; nothing is minted to pay rewards,
+        ever. The live balance in the portal is always the real figure.</p>
       <ul>
         <li><strong>Paid compute.</strong> Every job payment goes straight into the distributor,
           so demand for compute is what funds the operators serving it. This is automatic and
