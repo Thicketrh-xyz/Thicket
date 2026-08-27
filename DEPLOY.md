@@ -1,5 +1,9 @@
 # Deploying Thicket to Robinhood Chain Testnet
 
+> For a **mainnet** deploy see [MAINNET.md](MAINNET.md) — different network details,
+> a separate coordinator key, a lower opening pool balance, and ownership handed to a
+> multisig afterwards. Don't follow this page with mainnet values.
+
 Network: **Robinhood Chain Testnet** · chain ID **46630** · gas token **ETH**
 RPC `https://rpc.testnet.chain.robinhood.com/rpc` · explorer `https://explorer.testnet.chain.robinhood.com`
 

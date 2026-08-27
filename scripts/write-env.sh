@@ -3,13 +3,24 @@
 # writes them into frontend/.env and coordinator/.env. Run from the repo root
 # AFTER a successful `forge script ... --broadcast`.
 #
-#   ./scripts/write-env.sh [CHAIN_ID]   (default 46630 = Robinhood Chain testnet)
+#   ./scripts/write-env.sh [CHAIN_ID] [RPC_URL]
+#
+# Defaults to the testnet (46630). For mainnet pass both, so the written env
+# never silently points a mainnet deployment at the testnet RPC:
+#   ./scripts/write-env.sh <MAINNET_CHAIN_ID> "$ROBINHOOD_MAINNET_RPC"
 set -euo pipefail
 
 CHAIN_ID="${1:-46630}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BROADCAST="$ROOT/contracts/broadcast/Deploy.s.sol/$CHAIN_ID/run-latest.json"
-RPC="${ROBINHOOD_TESTNET_RPC:-https://rpc.testnet.chain.robinhood.com/rpc}"
+RPC="${2:-${ROBINHOOD_TESTNET_RPC:-https://rpc.testnet.chain.robinhood.com/rpc}}"
+
+# Guard the easy mistake: a non-testnet chain id with the testnet RPC still set.
+if [ "$CHAIN_ID" != "46630" ] && printf '%s' "$RPC" | grep -q "testnet"; then
+  echo "Refusing: chain $CHAIN_ID with a testnet RPC ($RPC)."
+  echo "Pass the right one:  ./scripts/write-env.sh $CHAIN_ID <RPC_URL>"
+  exit 1
+fi
 
 [ -f "$BROADCAST" ] || { echo "No broadcast at $BROADCAST — deploy first."; exit 1; }
 command -v jq >/dev/null || { echo "jq is required (brew install jq)."; exit 1; }
