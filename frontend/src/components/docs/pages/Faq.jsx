@@ -5,9 +5,9 @@ export function Faq() {
         <a href="/docs/troubleshooting">Troubleshooting</a> instead.</p>
 
       <h3>Is this audited, or on mainnet?</h3>
-      <p><strong>No, and no.</strong> Thicket runs on Robinhood Chain <strong>testnet</strong> and
-        no contract has been audited. THKT here has no monetary value and testnet gas is free.
-        Nothing you stake is real money.</p>
+      <p><strong>Yes</strong> Thicket runs on <strong>Robinhood Chain</strong> and
+         contract is yet to be audited.
+        </p>
 
       <h3>Do I need a GPU?</h3>
       <p>No, but memory matters more than you'd think. Uptime and challenges are CPU work. Serving
@@ -17,12 +17,12 @@ export function Faq() {
 
       <h3>How much can I earn?</h3>
       <p>Two components: a rate per minute online, plus 70% of what buyers paid for jobs you
-        completed. On testnet the uptime rate is 1 THKT/minute, which currently dwarfs what work
+        completed. The uptime rate is 1 THKT/minute, which currently dwarfs what work
         pays — that balance is expected to change. Read the live values from{" "}
         <code>/node/{`{address}`}</code> rather than trusting a number in prose.</p>
 
       <h3>Where does earned THKT come from?</h3>
-      <p>A pre-funded pool held by the RewardsDistributor. Tokens are transferred, never minted,
+      <p>A pre-funded pool held by the RewardsDistributor. Dev Buybacks
         and compute payments refill the pool. When it empties, claims pause until more revenue
         arrives — there is no inflation to fall back on.</p>
 
@@ -41,11 +41,11 @@ export function Faq() {
         before you point hardware at it.</p>
 
       <h3>Can I get a refund for a failed job?</h3>
-      <p>No. Payment enters the rewards pool on-chain before the work starts and nothing can pull it
+      <p> Payment enters the rewards pool on-chain before the work starts and nothing can pull it
         back out.</p>
 
       <h3>What happens if the coordinator disappears?</h3>
-      <p>Settled rewards stay claimable — they're in an on-chain root and the contract honours them
+      <p>Settled rewards stay claimable: they're in an on-chain root and the contract honours them
         without the coordinator. Unsettled earnings pause. Your bond is untouched. See{" "}
         <a href="/docs/architecture">Architecture</a>.</p>
 
