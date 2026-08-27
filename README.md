@@ -6,8 +6,7 @@ Thicket is a DePIN (decentralized physical infrastructure) network on **Robinhoo
 People download the node client, share spare GPU, and earn the **THKT** token per verified
 minute of contribution. Token holders can also earn by **staking/delegating** to operators.
 
-Inspired by [Crynux](https://crynux.io/), but scoped as a shippable MVP: instead of
-ZK-proof verified compute, Thicket uses a **hybrid model** — reward uptime, but nodes must
+Thicket uses a **hybrid model** — reward uptime, but nodes must
 pass periodic real inference *challenges* to keep earning, with staked bonds and slashing
 for anti-sybil.
 
