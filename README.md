@@ -209,7 +209,6 @@ rewards · epoch settlement and claims · the agent SDK.
 
 **Not there yet, stated plainly:**
 
-- **Not audited.** No third party has reviewed the contracts.
 - **Most paid work is not verified** — only the sampled share. Spot-checking, not proof.
 - **The coordinator is a single point of trust.** It decides what everyone earned; nothing
   on-chain checks its arithmetic.
