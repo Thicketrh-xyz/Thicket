@@ -235,7 +235,7 @@ export default function Home() {
         <section className="status-strip" aria-label="Network status">
           <div className="status-strip__intro">
             <span className="status-led" />
-            <div><strong>Testnet operational</strong><small>Live from the Thicket coordinator</small></div>
+            <div><strong>Mainnet Operational</strong><small>Live from the Thicket coordinator</small></div>
           </div>
           <div className="status-strip__items">
             <div><strong>Node client</strong><span>Available</span></div>
