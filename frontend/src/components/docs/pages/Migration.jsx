@@ -14,14 +14,15 @@ export function Migration() {
           straightforward; NodeStaking and RewardsDistributor hold everyone's money and are not.</li>
         <li><strong>A multisig on the publisher and owner keys.</strong> Today a single
           externally-owned account can publish reward roots and slash operators. Whoever holds it
-          can assign the entire 350M pool to an address of their choosing, and nothing on-chain
+          can assign the whole rewards pool to an address of their choosing, and nothing on-chain
           stops that. This is the largest unmitigated risk in the system.</li>
         <li><strong>Legal review</strong> of what the token is and how it is offered.</li>
         <li><strong>The bond re-check closed.</strong> Bonds are verified at registration and never
           again, so the stake behind a node is not continuously enforced.</li>
-        <li><strong>Delegation rewards either implemented or removed.</strong> The contract tracks
-          delegated stake and pays delegators nothing. Shipping that to mainnet unchanged would
-          take real money for a share that does not exist.</li>
+        <li><strong>Delegated stake carries no slash risk.</strong> Delegation now earns, but
+          <code>slash()</code> only touches an operator's own bond — so a delegator takes the
+          upside without the downside. Closing that needs a new NodeStaking, and leaving it open
+          on mainnet means delegation is risk-free yield paid out of a finite pool.</li>
         <li><strong>An answer for the coordinator being a single point of trust.</strong> At minimum
           published roots should be independently reproducible, so anyone can check the numbers
           rather than take them on faith.</li>
