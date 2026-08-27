@@ -3,23 +3,41 @@
 **A decentralized GPU network. Run a node on your machine, contribute AI compute, earn THKT.**
 
 Thicket is a DePIN (decentralized physical infrastructure) network on **Robinhood Chain**.
-People download the node client, share spare GPU, and earn the **THKT** token per verified
-minute of contribution. Token holders can also earn by **staking/delegating** to operators.
+People run the node client, share spare compute, and earn **THKT** two ways: a rate per
+minute online, plus a share of what buyers actually paid for the jobs their node completed.
+Token holders can also earn by **delegating** to operators.
 
-Thicket uses a **hybrid model** — reward uptime, but nodes must
-pass periodic real inference *challenges* to keep earning, with staked bonds and slashing
-for anti-sybil.
+It's a **hybrid model** — uptime is a subsidy so a node is worth running before demand
+exists, and completed work is what actually pays. Bonded stake, recomputable challenges and
+slashing keep it sybil-resistant without ZK proofs at this stage.
 
-## Brand
+Live at **[thicketrh.xyz](https://thicketrh.xyz)** · docs at
+**[thicketrh.xyz/docs](https://thicketrh.xyz/docs)**
 
-Lime-green circuit-tree on white (see the logo). Design tokens live in
-[`brand/theme.css`](brand/theme.css) — import them everywhere UI is rendered. Primary is
-`--thicket-lime: #a3ce3a`.
+## Contracts
+
+Robinhood Chain · chain ID **4663** · gas token ETH
+
+| | |
+|---|---|
+| THKT token | `0xC4F36C7c1D00dcaab1d01159466afa189BFc7161` |
+| NodeStaking | `0xB179254Ca9A5eB59270c6a0088DD46a8a07b9bb9` |
+| RewardsDistributor | `0x1c890110e9cc3dAdeBD6c449437606783B4B682b` |
+
+RPC `https://rpc.mainnet.chain.robinhood.com/rpc` · explorer
+[robinhoodchain.blockscout.com](https://robinhoodchain.blockscout.com) · full record in
+[`deployments/robinhood-mainnet.json`](deployments/robinhood-mainnet.json).
+
+**These are the only official addresses.** Verify anything you're unsure about against this
+repo and the explorer before sending funds.
 
 ## Run a node
 
-Any PC works — no GPU needed yet. You need a wallet holding **1,000 THKT** (the operator
-bond) plus a little testnet ETH for gas.
+No GPU required — **memory is the real constraint.** Uptime and challenges are CPU work.
+Serving paid jobs means running a real model, and a node sizes its context window to the
+job, up to 32k tokens on a long document. 8GB handles text; vision wants 16GB.
+
+You need a wallet holding **1,000 THKT** (the operator bond) plus a little ETH for gas.
 
 **1. Get the code and install**
 
@@ -35,52 +53,59 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m thicket_node.client --new-wallet
 ```
 
-Save the address and private key it prints, then send that address 1,000+ THKT and a little
-testnet ETH.
+Save what it prints, then send that address 1,000+ THKT and a little ETH.
 
-**3. Start earning**
+**3. Save your key once** (macOS — stored in the Keychain, never in shell history)
 
 ```bash
-.venv/bin/python -u -m thicket_node.client --key 0xYOUR_PRIVATE_KEY
+.venv/bin/python -m thicket_node.client --save-key
 ```
 
-That's it. The node bonds itself on-chain, registers, and starts earning. Watch it live at
-[thicketrh.xyz/app](https://thicketrh.xyz/app). Press `Ctrl+C` to stop — your bond stays staked.
+**4. Start earning**
 
-### Three ways to give it your key
+```bash
+.venv/bin/python -u -m thicket_node.client
+```
+
+The node bonds itself on-chain, registers, and starts earning. Watch it live at
+[thicketrh.xyz/app](https://thicketrh.xyz/app). `Ctrl+C` to stop — your bond stays staked.
+
+### Ways to give it your key
 
 | | How | Notes |
 |---|---|---|
-| **Prompt** *(safest)* | `.venv/bin/python -u -m thicket_node.client` | Asks for the key; input stays hidden and isn't saved to shell history |
-| **Flag** *(quickest)* | `--key 0xYOUR_KEY` | Convenient, but the key lands in your shell history |
-| **File** *(persistent)* | `echo 'THICKET_PRIVATE_KEY=0xYOUR_KEY' >> .env` | Set once, then just run the client |
+| **Keychain** *(best, macOS)* | `--save-key` | Encrypted at rest. macOS prompts for it directly, so it never touches the command line or shell history. `--forget-key` removes it |
+| **Prompt** | `.venv/bin/python -m thicket_node.client` | Asks each time; input stays hidden |
+| **File** | `echo 'THICKET_PRIVATE_KEY=0x…' >> .env` | Plaintext on disk — `chmod 600 .env`. The only option off macOS |
+| **Flag** *(avoid)* | `--key 0xYOUR_KEY` | Lands in your shell history and the process list |
 
-### Serve real AI jobs (optional but recommended)
+Resolution order: `--key` → `THICKET_PRIVATE_KEY`/`.env` → Keychain → prompt.
 
-Uptime alone earns THKT. To also get **paid compute jobs**, install
-[Ollama](https://ollama.com) and pull a model — the node detects what you have and
-advertises only what it can actually run.
+### Serve real AI jobs (this is what pays)
+
+Uptime alone earns the per-minute rate. To also receive **paid compute jobs** — and the 70%
+revenue share that comes with them — install [Ollama](https://ollama.com) and pull a model.
+The node detects what you have and advertises only what it can actually run.
 
 ```bash
-# text jobs (small + fast, runs on most laptops)
-ollama pull llama3.2:1b
-
-# image -> text jobs, e.g. captioning (heavier)
-ollama pull llava:7b
+ollama pull llama3.2:1b     # text jobs — runs on most laptops
+ollama pull llava:7b        # image → text (captioning) — heavier
 ```
 
-Restart the node and it will print what it can serve:
+Restart and it prints what it can serve:
 
 ```
 [thicket] serving jobs: text=llama3.2:1b, vision=llava:7b
 ```
 
-No Ollama? The node says so plainly and keeps earning from uptime — it just won't be
-handed jobs it can't do.
+No Ollama? The node says so plainly and keeps earning from uptime — it just won't be handed
+jobs it can't do.
 
 ### Handy flags
 
 ```bash
+--save-key            # store your key in the macOS Keychain
+--forget-key          # remove it again
 --new-wallet          # generate a wallet and exit
 --node-id my-rig      # name this node
 --bond 2000           # bond more than the minimum
@@ -91,8 +116,8 @@ handed jobs it can't do.
 
 ## Build on Thicket (agent SDK)
 
-Agents can't sign up for an API key — but they can hold a wallet. The SDK turns a
-job into one call: approve THKT, pay on-chain, submit, wait, return the result.
+Agents can't sign up for an API key — but they can hold a wallet. The SDK turns a job into
+one call: approve THKT, pay on-chain, submit, wait, return the result.
 
 ```python
 from thicket import Thicket
@@ -103,76 +128,101 @@ print(t.run("Summarise this: ...").output)  # pay + run + result
 print(t.caption("chart.png").output)        # vision jobs too
 ```
 
-It refuses before spending if no node can serve the job, the wallet is short, or the
-price exceeds a `max_price` you set. See [`sdk/`](sdk/).
+It refuses before spending if no node can serve the job, the wallet is short, or the price
+exceeds a `max_price` you set. See [`sdk/`](sdk/).
 
-## How it works — the hybrid loop
+## How it works
 
 ```
-register (bond THKT)  ──▶  heartbeat every 30s  ──▶  accrue contribution minutes
+register (bond THKT)  ──▶  heartbeat every 30s  ──▶  accrue minutes + completed work
         ▲                        │
         │                        ▼
-     slash bond  ◀── fail ── random inference challenge (~10 min) ── pass ──▶ keep earning
+     slash bond  ◀── fail ── challenge, checked by 3-node quorum ── pass ──▶ keep earning
                                  │
                                  ▼
         epoch close  ──▶  cumulative THKT per wallet  ──▶  Merkle root on-chain
                                  │
                                  ▼
-                    user clicks Claim  ──▶  one tx pulls accrued THKT
+                    click Claim  ──▶  one tx pulls everything accrued
 ```
 
-**Why Merkle-per-epoch:** per-minute rewards can't pay gas every minute. The coordinator
-accrues off-chain and publishes one cumulative root per epoch; users claim the delta.
+**Rewards** are `minutes × rate + 70% of what buyers paid` for jobs that node completed.
+Delegators take a stake-weighted share of their operator's earnings, minus a 20% commission.
 
-**Why challenges:** "earn for being online" invites fake nodes. A node with no GPU fails
-the inference challenge, its earnings for the window are voided, and repeated failures
-slash its bond. That's the anti-sybil core — no ZK required for the MVP.
+**Merkle-per-epoch** because per-minute rewards can't pay gas every minute. The coordinator
+accrues off-chain and publishes one cumulative root per epoch; you claim the delta.
+
+**Challenges** exist because "earn for being online" invites fake nodes. Tasks go to three
+random nodes at once and the majority decides; below three online, the coordinator verifies
+by recomputing. Disagree and your window's earnings are voided plus a strike — three strikes
+slash the bond.
+
+A sampled share of **paid jobs** is cross-checked the same way, and when it is, the buyer
+gets the answer the majority agreed on. That share is a live setting: read `spot_check_rate`
+from `/stats`. This is spot-checking, not proof — see
+[the docs](https://thicketrh.xyz/docs/verification).
 
 ## Repo layout
 
 | Path | What |
 |---|---|
-| [`contracts/`](contracts/) | Foundry — `ThicketToken` (THKT), `NodeStaking` (bond + delegation + slashing), `RewardsDistributor` (Merkle claims) |
-| [`coordinator/`](coordinator/) | FastAPI — heartbeats, contribution accounting, challenges, epoch → Merkle root |
-| [`node/`](node/) | Python node client (+ future Tauri desktop shell) users run to earn |
-| [`brand/`](brand/) | Shared design tokens from the logo |
+| [`contracts/`](contracts/) | Foundry — `ThicketToken`, `NodeStaking` (bond + delegation + slashing), `RewardsDistributor` (Merkle claims from a pool) |
+| [`coordinator/`](coordinator/) | FastAPI + Postgres — heartbeats, challenges, quorum verification, job routing, epoch → Merkle root |
+| [`node/`](node/) | The Python client operators run. Bonds, heartbeats, answers challenges, runs jobs via Ollama |
+| [`frontend/`](frontend/) | Landing page, portal and docs |
+| [`sdk/`](sdk/) | Agent SDK — buy compute from a wallet in one call |
+| [`brand/`](brand/) | Shared design tokens |
 
-## Roadmap
-
-1. **Contracts + testnet** — deploy the three contracts to Robinhood Chain testnet.
-2. **Coordinator + simulated nodes** — heartbeat accounting, epoch roots, claim flow.
-3. **Node client** — real desktop app, wallet, live earnings UI.
-4. **Challenge system** — real inference task + result verification (anti-sybil core).
-5. **Economics + hardening** — emission schedule, slashing tuning, load test, **legal review before mainnet.**
+`ECONOMICS.md` has measured numbers on what work actually costs a node; `VERIFICATION.md`
+is the design and limits of the quorum layer.
 
 ## Quick start
 
-**Contracts** (5 passing tests, incl. Python↔Solidity Merkle interop):
+**Contracts** (8 tests, incl. Python↔Solidity Merkle interop):
+
 ```bash
 cd contracts
 forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts
 forge test
 ```
 
-**Coordinator + end-to-end simulation** (no chain needed — runs in DRY mode):
+**Coordinator + end-to-end simulation** — no server, no chain, no model required:
+
 ```bash
 cd coordinator
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m sim        # 4 nodes register, solve challenges, one liar gets slashed, epoch root published
-.venv/bin/python gen_fixture.py # regenerate the Solidity interop test from the Python tree
+.venv/bin/python -m sim         # 78 checks across 16 scenarios
 .venv/bin/uvicorn app.main:app  # run the live API
 ```
 
-## Status — the anti-sybil core is real and verified
+The sim walks the cases that decide whether any of this works: a liar outvoted by two
+honest nodes, all three disagreeing, a node that never answers, a network too small to form
+a quorum, three strikes slashing a bond, a paid job settled by majority, and rewards split
+with delegators.
 
-The hybrid loop works end-to-end:
-- **Signing** — real EIP-191. Nodes prove address control; coordinator recovers + checks freshness.
-- **Challenge** — deterministic seeded compute (`challenge.py`), verified by recomputation. Liars fail, earnings void, repeated fails → on-chain `slash`.
-- **Merkle** — OZ-compatible tree (`merkle.py`); a Python-generated proof **verifies on-chain** (`MerkleInterop.t.sol`).
-- **Chain bridge** — reads bonds, publishes roots, slashes; DRY mode when no RPC/key is set.
+## What's built, and what isn't
 
-Still stubbed for later: the challenge is integer matmul, not yet a real GPU model (swap behind `solve_challenge`); redundant/majority verification; Postgres+Redis for state; the Tauri desktop UI. **Not audited. Not on mainnet.**
+**Working end to end:** bonding and registration · signed heartbeats · challenges verified
+by quorum or recomputation · real AI jobs through Ollama, text and vision · paid compute
+priced by size and verified on-chain before work starts · work-based rewards · delegation
+rewards · epoch settlement and claims · the agent SDK.
 
-> ⚠️ A token with staking yield paid from a treasury has real legal/securities
-> implications. Get qualified counsel before any public mainnet launch. This repo is
-> engineering scaffolding, not legal or financial advice.
+**Not there yet, stated plainly:**
+
+- **Not audited.** No third party has reviewed the contracts.
+- **Most paid work is not verified** — only the sampled share. Spot-checking, not proof.
+- **The coordinator is a single point of trust.** It decides what everyone earned; nothing
+  on-chain checks its arithmetic.
+- **Operators can't refuse jobs.** Beyond capability routing, whatever a buyer sends runs.
+- **No refunds.** Payment enters the pool before work starts and can't be pulled back.
+- **No image generation.** Vision means image-to-text.
+- **No desktop app.** The client is a terminal program.
+
+The most current version of this list is
+[What's live now](https://thicketrh.xyz/docs/status) — if anything here disagrees with it,
+that page is right.
+
+## License
+
+MIT. The coordinator is included, so you can read exactly how earnings are calculated
+rather than take our word for it.
