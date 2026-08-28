@@ -100,13 +100,13 @@ const roadmap = [
     items: ["THKT token", "Staking + slashing", "Merkle reward claims"],
   },
   {
-    state: "CURRENT",
+    state: "SHIPPED",
     stage: "Sprout",
     items: ["Coordinator + heartbeats", "Verifiable challenges", "Model runtime · text + vision",
             "Redundant verification", "Work-based rewards", "Node client", "Mainnet launch"],
   },
   {
-    state: "NEXT",
+    state: "CURRENT",
     stage: "Sapling",
     items: ["Operator job policy", "Token launch", "Mainnet economics",
             "Desktop node app", "Audit"],
