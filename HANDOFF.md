@@ -1,15 +1,16 @@
 # Thicket — session handoff
 
-Read this first. It's the state of the project as of commit `9fb11f0` (63 commits).
+Read this first. State of the project as of commit `0f58be4`.
 
 ## What Thicket is
 
 A decentralized GPU network on Robinhood Chain. Operators run a node client, pass
-verification challenges, and earn **THKT** per verified minute. Buyers pay THKT for AI
-compute (text + vision), and those payments refill the pool operators are paid from.
+verification challenges, and earn **THKT** — a rate per minute online, plus 70% of what
+buyers paid for jobs their node completed. Delegators take a stake-weighted share of an
+operator's earnings.
 
-**It is live on testnet and working end to end** — a real node has served real model
-jobs paid for with real on-chain THKT.
+**Live on mainnet.** Contracts, coordinator, site, portal, node client and SDK are all on
+chain 4663.
 
 ## Live
 
@@ -19,129 +20,147 @@ jobs paid for with real on-chain THKT.
 | Coordinator | https://thicket-production.up.railway.app (Railway + Postgres) |
 | Repo | https://github.com/Thicketrh-xyz/Thicket (public, MIT) |
 | Chain | Robinhood Chain **mainnet**, chain ID `4663` |
+| RPC | `https://rpc.mainnet.chain.robinhood.com/rpc` |
+| Explorer | https://robinhoodchain.blockscout.com |
 
-**Contracts** (fixed-supply pool model — no minting):
+**Contracts** — the token was launched separately and reused; the deploy minted nothing.
 
 | Contract | Address |
 |---|---|
 | THKT token | `0xC4F36C7c1D00dcaab1d01159466afa189BFc7161` (1B fixed) |
 | NodeStaking | `0xB179254Ca9A5eB59270c6a0088DD46a8a07b9bb9` |
-| RewardsDistributor | `0x1c890110e9cc3dAdeBD6c449437606783B4B682b` (pool opens low, grows) |
+| RewardsDistributor | `0x1c890110e9cc3dAdeBD6c449437606783B4B682b` |
 
-Treasury / publisher / slasher: `0x249d3652A487a116cFa39B7B0D1a2f1A020Ec860` (holds 650M THKT).
-Railway's `COORDINATOR_PRIVATE_KEY` **must** be this wallet's key — it's the only address
-allowed to publish reward roots and slash.
+Owner / treasury: `0xbc0840E56e35A1b333D7Df0D45c70E14343547BD`.
+Publisher + slasher (coordinator): `0x15213d78F46cA9C3175fEC8886AD490c145F9339` — this is
+the key in Railway's `COORDINATOR_PRIVATE_KEY`, and it is deliberately **not** the owner.
+
+There is an orphaned first deployment at token `0xB935013804172402144cDf34b8F459c7823e7837`
+from a deploy before the token-reuse fix. It is not used by anything. Its 970M float still
+sits with the old deployer — worth burning so nothing can trade as if it were THKT.
+
+## Read this before changing anything
+
+**The economics are being farmed, and it is accelerating.**
+
+At `REWARD_PER_MINUTE=1.0` a node earns 1,440 THKT/day and the bond is 1,000 THKT, so a
+node **pays back its bond in 16.7 hours** and then prints indefinitely for heartbeating and
+solving integer matmul. This is not a bug being exploited; it is the configured incentive
+working as specified.
+
+Observed: node count went **55 → 209 in a matter of hours**. At the first check, 50 of 55
+were one operator's fleet (`mn-1` … `mn-50`, sequentially named). Meanwhile
+`jobs_completed` is **3** — essentially no compute has been bought.
+
+```
+206 active nodes  ->  296,640 THKT/day  ->  ~270 days of pool runway
+```
+
+Two levers, neither applied yet because they are the project's call:
+
+- **`REWARD_PER_MINUTE`** (Railway env). At `0.05`, bond payback becomes ~14 days and
+  farming stops being free money. Honest operators still earn via the 70% work share.
+- **`minOperatorStake`** — `setMinOperatorStake()` on NodeStaking, owner-only. Raising it
+  makes fleets expensive rather than merely unprofitable.
+
+## Open problems, in rough priority order
+
+1. **Delegation is a griefing vector.** `delegate()` requires only that the operator is
+   registered — no consent, no cap, and there is no reject or remove function anywhere in
+   NodeStaking. Anyone can delegate to any operator and take a share of their earnings
+   against their will. Worse, the split in `epoch.py` applies to `uptime + work`, not just
+   work, so it dilutes income the operator earned purely by being online. **Cheapest fix:**
+   split only `node.work_thkt` — a one-line change, no contract needed.
+2. **Delegation is invisible to operators.** `/node/{address}` never mentions it, so an
+   operator who receives a delegation sees earnings drop with no explanation. The data
+   exists (`Delegation` rows are keyed by operator; `chain.operator_stake()` returns
+   delegated stake) — it just is not surfaced.
+3. **The coordinator runs out of gas and silently breaks claims.** `EPOCH_SECONDS=60` means
+   ~1,440 root publishes a day. When the wallet empties, `publish_root` throws, the
+   scheduler swallows it, `/health` still says `ok`, and the on-chain root freezes while the
+   database keeps accruing — so every claim reverts with `InvalidProof`, which the frontend
+   shows as "unknown custom error". **This has already happened once.** Raise
+   `EPOCH_SECONDS`, keep the wallet funded, and surface publish failures in `/health`.
+4. **The bond is checked only at registration.** `is_bonded` appears zero times in the
+   heartbeat handler, so an operator can unbond and keep earning until the coordinator
+   restarts.
+5. **No multisig.** The owner key can call `recover()` and move the whole pool in one
+   transaction. The project has decided against transferring ownership for now — this is a
+   known, accepted risk, not an oversight.
+6. **Contracts are unaudited.**
 
 ## Architecture
 
 ```
-Browser ──▶ Frontend (Vercel)  ──▶ Coordinator (Railway) ──▶ Contracts (testnet)
+Browser ──▶ Frontend (Vercel)  ──▶ Coordinator (Railway) ──▶ Contracts (mainnet 4663)
 Agents  ──▶ SDK (sdk/thicket.py) ──▶      │
 Nodes   ──▶ node client ───────────────────┘
 ```
 
 - `contracts/` — Foundry. Fixed-supply token, staking/slashing, Merkle claims from a pool.
-- `coordinator/` — FastAPI + Postgres. Heartbeats, challenges, job routing, epoch settlement.
-- `node/` — the client operators run. Bonds on-chain, heartbeats, solves challenges, runs jobs via Ollama.
-- `frontend/` — landing + portal + docs (one design system, `ref-landing.css`).
+- `coordinator/` — FastAPI + Postgres. Heartbeats, challenges, quorum, job routing, epochs.
+- `node/` — the client operators run. Bonds, heartbeats, solves challenges, runs Ollama.
+- `frontend/` — landing + portal + docs (15 docs pages under `/docs/<slug>`).
 - `sdk/` — agent SDK: buy compute from a wallet in one call.
+
+`ECONOMICS.md` — measured cost of real work. `VERIFICATION.md` — quorum design and limits.
 
 ## What's built
 
-- **Redundant verification** — a sampled share of tasks runs on k=3 random nodes and is
-  settled by majority; disagreement voids earnings and strikes, 3 strikes slashes the bond
-- Fixed-supply **pool tokenomics** (launchpad-compatible; rewards transferred, never minted)
-- **Work-based rewards** — operators earn uptime *plus* a share of what buyers paid for the
-  jobs they actually completed; a strike voids both
-- **Anti-sybil**: on-chain bond + EIP-191 signed heartbeats + challenges verified by quorum
-  (or recompute, below k nodes) + slashing
-- **Real AI jobs** via Ollama — text (`llama3.2:1b`) and vision (`llava:7b`), capability-routed
-  so a node only gets work it can actually do
-- **Size-based pricing** — base + per-1k-chars; quoted before payment, re-priced server-side on
-  submit, and inputs too large for a node to read are refused before payment rather than truncated
-- **Bulk** — one payment, many items, fanned out (4 jobs per node per heartbeat); UI + SDK
-- **Agent SDK** with spend guards (no capable node / insufficient balance / over max_price)
-- Job history, failure reporting, orphaned-job requeue, `/debug/jobs`
-
-## What's left, in priority order
-
-1. **Economics — supply side.** Measured: see `ECONOMICS.md`. A 12-item batch took 14.2s, the
-   buyer paid 62.39 THKT and the operator earned 0.237 THKT — *exactly* what an idle node earned
-   over the same seconds. Two pricing bugs the measurement exposed are now fixed (silent document
-   truncation, and per-megapixel pricing that charged 7.2x for identical work).
-   **Built:** `reward = minutes x REWARD_PER_MINUTE + work_thkt`, where work_thkt is
-   `OPERATOR_REVENUE_SHARE` (0.7) of what the buyer paid for jobs that node completed.
-   Revenue share rather than a per-unit rate, because the pool is finite and a rate is an
-   unbounded claim on it. Work is priced server-side, never self-reported by the node.
-   Quorum jobs split one share between agreeing nodes.
-   **One thing left, and it's a decision not code:** `REWARD_PER_MINUTE` is still 1.0, so
-   uptime (60 THKT/hr) still dwarfs work (~3.5 THKT/job). Lower it — ~0.05 makes one job
-   beat an hour of idling — but keep it non-zero so a node is worth running before demand.
-2. ~~**Job verification.**~~ **Built** — see `VERIFICATION.md`. k-node quorum (k=3), 10%
-   spot-check on paid work, majority settlement wired to the existing strike/slash path,
-   recompute fallback when fewer than k nodes are online. `coordinator/sim.py` covers it.
-   The claim you can now make is narrow and worth keeping narrow: *a sampled share of work
-   is cross-checked by three independent nodes*. Not "all work is verified".
-3. **Operators can't refuse jobs** — whatever a buyer sends runs on their machine.
-4. **Mainnet prerequisites** — audit, multisig on publisher/owner, legal review. The
-   `RewardsDistributor` holds the pool and whoever controls the publisher key can drain it.
-
-## Untested
-
-- The SDK's **paid** path (reads and guards verified; never completed a paid job)
-- A **real bulk run** on the live network
-- **Quorum with more than one real machine.** The logic is covered by `sim.py` and a single
-  real node was run end to end, but three separate machines have never voted on one task.
-  The similarity threshold (`QUORUM_JOB_THRESHOLD`, 0.72) was measured on one box, where
-  `temperature: 0` makes output byte-identical — it has never been tested against two
-  different GPUs or quantisations.
-
-All need a funded wallet or more hardware. Expect rough edges there first.
+- **Work-based rewards** — uptime plus 70% of what buyers paid; delegation splits it
+- **Redundant verification** — k=3 quorum on challenges and a sampled share of paid jobs,
+  settled by majority, wired to strike/slash; recompute fallback below k nodes
+- **Real AI jobs** via Ollama — text and vision, capability-routed
+- **Size-based pricing**, quoted before payment, re-priced server-side, oversized input
+  refused with 413 rather than silently truncated
+- Bulk batches, job history, agent SDK with spend guards
+- Keychain key storage on the node (`--save-key`)
 
 ## Gotchas
 
-- **Git pushes need the `Gentle2003` account.** `gh` has two accounts and its credential
-  helper only ever serves the *active* one (gh 2.97: a username in the remote URL is
-  ignored), so the active account decides the push. `Gentle2003` is the one with access
-  to this org and should stay active — don't switch back to `parleyrobinhood` afterwards,
-  that only leaves the next session unable to push. If it's ever not active:
-  ```
-  gh auth switch --hostname github.com --user Gentle2003
-  ```
-- Commits are authored as **Thicket Team**, deliberately — the repo is public.
-- `reference/` is git-ignored (design source, local only).
-- Coordinator schema changes need an entry in `_ADDED` / `_WIDENED` in `coordinator/app/db.py` —
-  `create_all()` won't alter live tables.
+- **Git pushes need the `Gentle2003` account.** gh's credential helper only serves the
+  *active* account (gh 2.97: a username in the remote URL is ignored). Keep `Gentle2003`
+  active; do not switch back to `parleyrobinhood`.
+- **Never use the GitHub web editor on this repo.** Web edits are authored by your account
+  and re-add you to the contributors list. History was rewritten twice to clear it. Edit
+  locally and push.
+- **Railway CLI is installed and linked** (`abundant-nurturing` / `Thicket` service). Two
+  Postgres services exist: `Postgres` (old testnet data) and `Postgres-DeL4` (live).
+- **Vercel CLI must run from the repo root**, not `frontend/` — the project's Root
+  Directory is already `frontend`, so running inside it resolves to `frontend/frontend`.
+- **Vercel `VITE_*` vars override code defaults** and are baked in at build time. Changing
+  them needs a redeploy.
+- Coordinator schema changes need an entry in `_ADDED` / `_WIDENED` in `coordinator/app/db.py`.
 - Node env values must not have inline comments (`KEY=  # note` becomes the note).
-- Key resolution order is `--key` > `THICKET_PRIVATE_KEY`/`node/.env` > macOS Keychain >
-  interactive prompt. `--save-key` has macOS collect the key itself, so it never touches
-  argv or shell history; `node/.env` is the fallback elsewhere and wants `chmod 600`.
+- `MAINNET.md` and `scripts/deploy-mainnet.sh` are gitignored — local only, deliberately.
 
 ## Running things
 
 ```bash
-# verification scenarios (no server, no chain, no model)
-cd coordinator && .venv/bin/python -m sim
+# verification + reward scenarios (no server, no chain, no model)
+cd coordinator && .venv/bin/python -m sim        # 78 checks, 16 scenarios
 
-# node — save the key once (macOS Keychain), then just run it
-cd node && .venv/bin/python -m thicket_node.client --save-key
+# node
+cd node && .venv/bin/python -m thicket_node.client --save-key   # once
 cd node && .venv/bin/python -u -m thicket_node.client
-ollama pull llama3.2:1b     # text jobs      (optional, but needed to serve work)
-ollama pull llava:7b        # vision jobs
 
 # coordinator locally (SQLite, DRY mode)
 cd coordinator && .venv/bin/uvicorn app.main:app --port 8000
 
 # frontend
-cd frontend && npm run dev                                   # port 5178
+cd frontend && npm run dev                                       # port 5178
 
 # contracts
-cd contracts && forge test
+cd contracts && forge test                                       # 8 tests
 ```
 
 ## Honest status
 
-Testnet, **unaudited**. THKT has no real value here. The "compute" is genuinely real now
-(actual models, actual output). Output is **spot-checked, not verified**: 10% of paid work is
-cross-checked by three nodes and the other 90% is policed only by the risk of being sampled.
-The reward side of the economy is still not tied to work done.
+Mainnet, **unaudited**. The compute is genuinely real — actual models, actual output — but
+almost none is being bought (`jobs_completed` = 3 against ~30k tasks executed). Paid output
+is spot-checked at best: `spot_check_rate` is a live setting, and at zero nothing is
+cross-checked at all.
+
+The network is currently a large uptime farm rather than a compute market. That is a
+consequence of the reward rate, not of anyone cheating, and it is the single most important
+thing to decide on.
