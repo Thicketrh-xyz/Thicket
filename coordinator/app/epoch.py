@@ -160,6 +160,7 @@ def close_epoch() -> dict:
         entries = [(addr, int(amt * 1e18)) for addr, amt in totals.items() if amt > 0]
         tree = MerkleTree(entries)
         # commit happens on context exit; publish after so state is durable first
+    invalidate_claims_cache()   # settlement just changed every balance
     root = tree.root_hex()
     tx, error = None, None
     try:
@@ -177,17 +178,47 @@ def close_epoch() -> dict:
             "publish_error": error, "tx": tx, "claims": tree.claims()}
 
 
-def current_claims() -> dict:
-    """Claim table from already-settled cumulative rewards (for the UI)."""
-    with session_scope() as db:
+# The claim table only changes when an epoch settles, but it was rebuilt from
+# scratch — every node, every delegation, a whole Merkle tree — on every single
+# poll of /node/{address}. Cached for CLAIMS_TTL_S and dropped on settlement.
+CLAIMS_TTL_S = float(os.getenv("CLAIMS_TTL_S", "15"))
+_claims_cache: dict = {"at": 0.0, "claims": None}
+
+
+def invalidate_claims_cache() -> None:
+    _claims_cache["at"] = 0.0
+    _claims_cache["claims"] = None
+
+
+def current_claims(db=None) -> dict:
+    """Claim table from already-settled cumulative rewards (for the UI).
+
+    Pass the caller's session when there is one. Opening its own while the
+    request already held one meant every /node/{address} took *two* of the
+    pool's connections, which is half the reason the pool ran dry.
+    """
+    now = time.time()
+    if _claims_cache["claims"] is not None and now - _claims_cache["at"] < CLAIMS_TTL_S:
+        return _claims_cache["claims"]
+
+    def build(session) -> dict:
         totals: dict[str, float] = {}
-        for n in db.query(Node).all():
+        for n in session.query(Node).all():
             if n.cumulative_reward > 0:
                 totals[n.address] = totals.get(n.address, 0.0) + n.cumulative_reward
-        for d in db.query(Delegation).filter(Delegation.cumulative_reward > 0).all():
+        for d in session.query(Delegation).filter(Delegation.cumulative_reward > 0).all():
             totals[d.delegator] = totals.get(d.delegator, 0.0) + d.cumulative_reward
         entries = [(a, int(v * 1e18)) for a, v in totals.items() if v > 0]
-    return MerkleTree(entries).claims()
+        return MerkleTree(entries).claims()
+
+    if db is not None:
+        claims = build(db)
+    else:
+        with session_scope() as session:
+            claims = build(session)
+
+    _claims_cache.update(at=now, claims=claims)
+    return claims
 
 
 def start_scheduler() -> None:

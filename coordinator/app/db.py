@@ -23,7 +23,22 @@ elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True)
+# Pool sizing is load-bearing here, not boilerplate. SQLAlchemy's defaults are
+# pool_size=5 / max_overflow=10 — fifteen connections for a network of 200+
+# nodes heartbeating continuously plus a portal that polls. When they run out,
+# requests block for pool_timeout seconds; those blocked requests then occupy
+# Starlette's sync threadpool, and endpoints that touch no database at all
+# (/health) stop responding too. That is exactly how this fell over.
+#
+# The short timeout is deliberate: failing fast frees the worker thread, where
+# waiting 30s takes the whole server down with it.
+_POOL = {} if DATABASE_URL.startswith("sqlite") else {
+    "pool_size": int(os.getenv("DB_POOL_SIZE", "20")),
+    "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "10")),
+    "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "10")),
+    "pool_recycle": 1800,
+}
+engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True, **_POOL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

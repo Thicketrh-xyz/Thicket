@@ -120,6 +120,7 @@ def _startup():
     init_db()
     start_scheduler()
     schedule(sweep_quorums, qm.QUORUM_DEADLINE_S, "sweep_quorums")
+    schedule(refresh_gas_cache, _GAS_REFRESH_S, "refresh_gas")
 
 
 def get_db():
@@ -158,22 +159,41 @@ class ChallengeResultReq(BaseModel):
     output_hash: str
 
 
-# Gas runway is an RPC round-trip, and /health is polled by the platform, so the
-# reading is cached for a minute rather than fetched per request.
-_GAS_CACHE_S = 60
+# Gas runway is two RPC round-trips. It is refreshed on the scheduler and only
+# ever *read* from here — a cache filled inside the request path is a cache that
+# several concurrent requests can miss at once, and they then all sit blocking
+# on the RPC while holding a worker thread each. /health has to answer even when
+# the chain is unreachable, so it must do no I/O of its own.
+_GAS_REFRESH_S = 60
 _gas_cache: dict = {"at": 0.0, "balance": 0.0, "cost": 0.0}
 
 
+def refresh_gas_cache() -> None:
+    """Scheduler job: read the publisher's balance and the current gas price."""
+    try:
+        _gas_cache.update(at=time.time(), balance=chain.gas_balance(),
+                          cost=chain.publish_cost())
+    except Exception:  # noqa: BLE001 — a stale reading beats a dead health check
+        pass
+
+
 def _gas_runway() -> dict:
-    """Publisher balance and how many epochs it still pays for."""
-    now = time.time()
-    if now - _gas_cache["at"] > _GAS_CACHE_S:
-        _gas_cache.update(at=now, balance=chain.gas_balance(), cost=chain.publish_cost())
+    """Publisher balance and how many epochs it still pays for (cached).
+
+    Until the scheduler has run once the answer is honestly unknown, and
+    reporting a balance of 0.0 there would read as an empty wallet — the exact
+    emergency this endpoint exists to announce.
+    """
+    if not _gas_cache["at"]:
+        return {"publisher": chain.publisher_address(), "balance": None,
+                "publishes_left": None, "hours_left": None, "read_at": None}
+
     balance, cost = _gas_cache["balance"], _gas_cache["cost"]
     publishes = int(balance / cost) if cost > 0 else None
     return {
         "publisher": chain.publisher_address(),
         "balance": round(balance, 6),
+        "read_at": _gas_cache["at"],
         "publishes_left": publishes,
         # At EPOCH_SECONDS the scheduler spends one publish per epoch, so this is
         # the number operators actually care about.
@@ -925,7 +945,7 @@ def delegations_of(address: str, db: Session = Depends(get_db)):
     settled = sum(r.cumulative_reward for r in rows)
 
     claim = None
-    for k, v in current_claims().items():
+    for k, v in current_claims(db).items():
         if k.lower() == address.lower():
             claim = v
             break
@@ -970,7 +990,7 @@ def node_status(address: str, db: Session = Depends(get_db)):
     pending = uptime_thkt + node.work_thkt
 
     claim = None
-    for k, v in current_claims().items():
+    for k, v in current_claims(db).items():
         if k.lower() == node.address.lower():
             claim = v
             break
