@@ -30,6 +30,25 @@ DELEGATION_FROM_BLOCK = int(os.getenv("DELEGATION_FROM_BLOCK", "0"))
 _chain = ChainBridge()
 _scheduler: BackgroundScheduler | None = None
 
+# Outcome of the most recent publish attempt. The scheduler swallows whatever
+# close_epoch raises, so without this a failed publish is completely silent:
+# /health keeps saying ok, the on-chain root stops moving, and the first anyone
+# hears of it is claims reverting with InvalidProof. Kept in memory on purpose —
+# it describes this process, and a restart genuinely has nothing to report yet.
+_last_publish: dict = {
+    "at": None,          # unix ts of the last attempt
+    "ok": None,          # None until an attempt has been made
+    "root": None,
+    "tx": None,
+    "error": None,
+    "consecutive_failures": 0,
+}
+
+
+def last_publish() -> dict:
+    """Snapshot of the most recent publish attempt (see _last_publish)."""
+    return dict(_last_publish)
+
 
 def sync_delegations(db) -> int:
     """Refresh the delegation mirror from chain. Returns pairs known after sync.
@@ -141,9 +160,21 @@ def close_epoch() -> dict:
         entries = [(addr, int(amt * 1e18)) for addr, amt in totals.items() if amt > 0]
         tree = MerkleTree(entries)
         # commit happens on context exit; publish after so state is durable first
-    _chain.publish_root(tree.root_hex())
-    return {"root": tree.root_hex(), "accounts": len(entries), "held": held,
-            "to_delegators": round(paid_out, 6), "claims": tree.claims()}
+    root = tree.root_hex()
+    tx, error = None, None
+    try:
+        tx = _chain.publish_root(root)
+    except Exception as exc:  # noqa: BLE001 — out of gas, RPC down, nonce clash
+        error = f"{type(exc).__name__}: {exc}"
+
+    _last_publish.update(
+        at=time.time(), ok=error is None, root=root, tx=tx, error=error,
+        consecutive_failures=0 if error is None
+        else _last_publish["consecutive_failures"] + 1,
+    )
+    return {"root": root, "accounts": len(entries), "held": held,
+            "to_delegators": round(paid_out, 6), "published": error is None,
+            "publish_error": error, "tx": tx, "claims": tree.claims()}
 
 
 def current_claims() -> dict:

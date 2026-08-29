@@ -27,7 +27,7 @@ from .challenge import make_challenge, verify as verify_challenge
 from .db import (Batch, Counter, Delegation, Job, Node, Quorum, QuorumResult,
                  SessionLocal, init_db)
 from .epoch import (EPOCH_SECONDS, OPERATOR_COMMISSION, REWARD_PER_MINUTE, chain_bridge,
-                    close_epoch, current_claims, schedule, start_scheduler,
+                    close_epoch, current_claims, last_publish, schedule, start_scheduler,
                     sync_delegations)
 
 app = FastAPI(title="Thicket Coordinator", version="0.3.0")
@@ -158,9 +158,62 @@ class ChallengeResultReq(BaseModel):
     output_hash: str
 
 
+# Gas runway is an RPC round-trip, and /health is polled by the platform, so the
+# reading is cached for a minute rather than fetched per request.
+_GAS_CACHE_S = 60
+_gas_cache: dict = {"at": 0.0, "balance": 0.0, "cost": 0.0}
+
+
+def _gas_runway() -> dict:
+    """Publisher balance and how many epochs it still pays for."""
+    now = time.time()
+    if now - _gas_cache["at"] > _GAS_CACHE_S:
+        _gas_cache.update(at=now, balance=chain.gas_balance(), cost=chain.publish_cost())
+    balance, cost = _gas_cache["balance"], _gas_cache["cost"]
+    publishes = int(balance / cost) if cost > 0 else None
+    return {
+        "publisher": chain.publisher_address(),
+        "balance": round(balance, 6),
+        "publishes_left": publishes,
+        # At EPOCH_SECONDS the scheduler spends one publish per epoch, so this is
+        # the number operators actually care about.
+        "hours_left": round(publishes * EPOCH_SECONDS / 3600, 1)
+        if publishes is not None and EPOCH_SECONDS > 0 else None,
+    }
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "dry": chain.dry, "epoch_seconds": EPOCH_SECONDS}
+    """Liveness plus the two things that fail quietly: publishing and gas.
+
+    `status` is degraded — not ok — when the last root failed to publish, when no
+    epoch has closed in a while, or when the publisher is nearly out of gas. All
+    three end the same way (a frozen root and claims reverting with
+    InvalidProof), and all three used to be invisible here.
+    """
+    pub = last_publish()
+    gas = _gas_runway()
+    now = time.time()
+    ago = None if pub["at"] is None else round(now - pub["at"], 1)
+
+    problems = []
+    if pub["ok"] is False:
+        problems.append("last publish failed")
+    # Three missed epochs is a stalled scheduler, not a slow one. Before the
+    # first close there is nothing to judge, so a fresh process stays ok.
+    if ago is not None and EPOCH_SECONDS > 0 and ago > EPOCH_SECONDS * 3:
+        problems.append("no epoch closed recently")
+    if gas["publishes_left"] is not None and gas["publishes_left"] < 100:
+        problems.append("publisher low on gas")
+
+    return {
+        "status": "degraded" if problems else "ok",
+        "problems": problems,
+        "dry": chain.dry,
+        "epoch_seconds": EPOCH_SECONDS,
+        "last_publish": {**pub, "ago_s": ago},
+        "gas": gas,
+    }
 
 
 @app.get("/stats")

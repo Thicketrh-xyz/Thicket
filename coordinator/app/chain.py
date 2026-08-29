@@ -56,6 +56,10 @@ _DISTRIBUTOR_ABI = [
 ]
 
 
+# Observed cost of a publishRoot on Robinhood Chain, used only for runway math.
+_PUBLISH_GAS = 50_000
+
+
 class ChainBridge:
     def __init__(self):
         self.rpc = os.getenv("ROBINHOOD_RPC")
@@ -89,6 +93,39 @@ class ChainBridge:
             return self.distributor.functions.poolBalance().call() / 1e18
         except Exception:  # noqa: BLE001
             return 0.0
+
+    def gas_balance(self) -> float:
+        """Native balance of the publisher key, in whole units (0.0 in DRY mode).
+
+        The coordinator pays gas for every root publish. When this hits zero the
+        publish throws, the on-chain root freezes, and every claim starts
+        reverting with InvalidProof while the database keeps accruing — so this
+        is worth watching from /health rather than discovering from a support
+        ticket.
+        """
+        if self.dry:
+            return 0.0
+        try:
+            return self.w3.eth.get_balance(self.acct.address) / 1e18
+        except Exception:  # noqa: BLE001
+            return 0.0
+
+    def publish_cost(self) -> float:
+        """Rough cost of one publishRoot at the current gas price, in native units.
+
+        Gas is estimated rather than measured: a real estimate_gas needs the tx
+        built against a live nonce, and this only has to be good enough to say
+        "days of runway", not to price a transaction.
+        """
+        if self.dry:
+            return 0.0
+        try:
+            return (_PUBLISH_GAS * self.w3.eth.gas_price) / 1e18
+        except Exception:  # noqa: BLE001
+            return 0.0
+
+    def publisher_address(self) -> str | None:
+        return None if self.dry else self.acct.address
 
     def operator_stake(self, address: str) -> tuple[float, float]:
         """(self_stake, delegated_stake) in THKT for one operator."""
