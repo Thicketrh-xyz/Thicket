@@ -56,7 +56,10 @@ _DISTRIBUTOR_ABI = [
 ]
 
 
-# Observed cost of a publishRoot on Robinhood Chain, used only for runway math.
+# Gas assumed for a publishRoot when estimating runway. A measured one costs
+# ~35.6k, so this is padded by roughly 40% on purpose: the number feeds a
+# low-gas warning, and an alarm that fires early is worth more than one that
+# reports the balance flatteringly and goes off too late.
 _PUBLISH_GAS = 50_000
 
 
