@@ -75,12 +75,15 @@ Two levers, neither applied yet because they are the project's call:
    operator who receives a delegation sees earnings drop with no explanation. The data
    exists (`Delegation` rows are keyed by operator; `chain.operator_stake()` returns
    delegated stake) — it just is not surfaced.
-3. **The coordinator runs out of gas and silently breaks claims.** `EPOCH_SECONDS=60` means
-   ~1,440 root publishes a day. When the wallet empties, `publish_root` throws, the
-   scheduler swallows it, `/health` still says `ok`, and the on-chain root freezes while the
-   database keeps accruing — so every claim reverts with `InvalidProof`, which the frontend
-   shows as "unknown custom error". **This has already happened once.** Raise
-   `EPOCH_SECONDS`, keep the wallet funded, and surface publish failures in `/health`.
+3. **The coordinator runs out of gas.** `EPOCH_SECONDS=60` means ~1,440 root publishes a
+   day. When the wallet empties, `publish_root` throws, the on-chain root freezes while the
+   database keeps accruing, and every claim reverts with `InvalidProof` — which the frontend
+   shows as "unknown custom error". **This has already happened once.**
+   *No longer silent:* `/health` now reports `last_publish` and `gas`, and goes `degraded` on
+   a failed publish, a scheduler that has missed three epochs, or under a day of gas left.
+   The remaining half is unfixed — the burn rate itself. `EPOCH_SECONDS` stays at **60** by
+   choice, so the wallet needs topping up every few days; nothing does that automatically,
+   and nothing pages anyone when `/health` turns `degraded`.
 4. **The bond is checked only at registration.** `is_bonded` appears zero times in the
    heartbeat handler, so an operator can unbond and keep earning until the coordinator
    restarts.
