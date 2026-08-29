@@ -10,6 +10,7 @@ const docsRoutes = {
     server.middlewares.use((req, _res, next) => {
       if (/^\/docs(\/|$)/.test(req.url.split("?")[0])) req.url = "/docs.html";
       else if (/^\/app(\/|$)/.test(req.url.split("?")[0])) req.url = "/app.html";
+      else if (/^\/nodes(\/|$)/.test(req.url.split("?")[0])) req.url = "/nodes.html";
       next();
     });
   },
@@ -18,9 +19,9 @@ const docsRoutes = {
 export default defineConfig({
   plugins: [react(), tailwindcss(), docsRoutes],
   build: {
-    // Multi-page: landing (index.html) + docs (docs.html).
+    // Multi-page: landing (index.html) + portal + docs + public node list.
     rollupOptions: {
-      input: { main: "index.html", app: "app.html", docs: "docs.html" },
+      input: { main: "index.html", app: "app.html", docs: "docs.html", nodes: "nodes.html" },
     },
   },
   server: {

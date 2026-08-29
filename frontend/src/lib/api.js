@@ -22,6 +22,11 @@ export function fetchNode(address) {
   return get(`/node/${address}`);
 }
 
+// The public node list. Everything the node page shows in one call.
+export function fetchNodes({ limit = 50, offset = 0, sort = "earned", status = "all" } = {}) {
+  return get(`/nodes?limit=${limit}&offset=${offset}&sort=${sort}&status=${status}`);
+}
+
 // Real network-wide stats for the landing page.
 export function fetchStats() {
   return get("/stats");

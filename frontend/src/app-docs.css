@@ -193,3 +193,45 @@
     color: var(--muted-foreground); }
   .docs-mobile-nav a.is-active { color: var(--foreground); font-weight: 600; }
 }
+
+/* ---------- public node page ---------- */
+.nodes-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+.nodes-controls .tabs { margin-bottom: 0; }
+.nodes-refresh { margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+  background: transparent; border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+  padding: 8px 14px; color: var(--muted-foreground); font-family: var(--font-display);
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+.nodes-refresh:hover { color: var(--foreground); }
+.is-spinning { animation: nodes-spin 1s linear infinite; }
+@keyframes nodes-spin { to { transform: rotate(360deg); } }
+
+/* The table is seven columns of numbers; on a phone it scrolls sideways inside
+   its own box rather than forcing the whole page to. */
+.nodes-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--card); margin-top: 16px; }
+.nodes-table { margin: 0; min-width: 720px; font-variant-numeric: tabular-nums; }
+.nodes-table th, .nodes-table td { padding: 12px 14px; vertical-align: middle; white-space: nowrap; }
+.nodes-table thead th { position: sticky; top: 0; background: var(--card); z-index: 1; }
+.nodes-table tbody tr:hover { background: var(--secondary); }
+.nodes-table .num { text-align: right; }
+.nodes-addr { display: inline-flex; align-items: center; gap: 5px; color: var(--foreground); text-decoration: none; }
+.nodes-addr:hover { color: var(--lime-ink, #5f8a10); }
+.nodes-addr code { font-size: .9rem; }
+.nodes-id { color: var(--muted-foreground); font-size: .78rem; margin-top: 2px; }
+.nodes-empty { text-align: center; color: var(--muted-foreground); padding: 34px 0; }
+
+.nodes-pager { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin-top: 16px; flex-wrap: wrap; }
+.nodes-pager .hint { margin-top: 0; }
+/* Not .button--small: that is display:none under 420px, which would strand a
+   phone reader on page one. */
+.nodes-pager__btn { background: transparent; border: 1px solid var(--line); border-radius: 999px;
+  padding: 9px 17px; cursor: pointer; color: var(--foreground); font-family: var(--font-display);
+  font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+.nodes-pager__btn:hover:not(:disabled) { background: var(--secondary); }
+.nodes-pager__btn:disabled { opacity: .38; cursor: default; }
+
+@media (max-width: 720px) {
+  .nodes-controls { gap: 10px; }
+  .nodes-refresh { margin-left: 0; }
+}

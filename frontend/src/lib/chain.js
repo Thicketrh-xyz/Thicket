@@ -1,6 +1,6 @@
 // Wallet + contract wiring via ethers v6. All calls no-op gracefully if a
 // wallet or contract address is missing, so the app still runs in demo mode.
-import { BrowserProvider, Contract, id, parseUnits } from "ethers";
+import { BrowserProvider, Contract, JsonRpcProvider, id, parseUnits } from "ethers";
 import { config } from "../config";
 import { TOKEN_ABI, STAKING_ABI, DISTRIBUTOR_ABI } from "./abi";
 
@@ -55,6 +55,40 @@ export async function connect() {
 function contract(addr, abi, signer) {
   if (!addr) return null;
   return new Contract(addr, abi, signer);
+}
+
+// Read-only provider over the public RPC. Every other read here takes a signer,
+// which is fine inside the portal but wrong for a public page: the node list has
+// to render for a visitor with no wallet installed at all.
+export function publicProvider() {
+  try {
+    return new JsonRpcProvider(config.chain.rpcUrls[0], config.chain.chainId);
+  } catch {
+    return null;
+  }
+}
+
+// On-chain `claimed(address)` for a page of operators, so the reader can check
+// the coordinator's numbers against the contract instead of trusting them.
+//
+// Chunked rather than one big Promise.all: this is a public RPC and fifty
+// simultaneous eth_calls is how you get rate-limited. A failed chunk yields
+// nulls for those rows — the column renders as unknown, the page still works.
+export async function getClaimedFor(addresses, distributorAddr) {
+  const out = new Map();
+  const provider = publicProvider();
+  if (!provider || !distributorAddr || !addresses.length) return out;
+  const d = new Contract(distributorAddr, DISTRIBUTOR_ABI, provider);
+
+  const CHUNK = 8;
+  for (let i = 0; i < addresses.length; i += CHUNK) {
+    const chunk = addresses.slice(i, i + CHUNK);
+    const vals = await Promise.all(
+      chunk.map((a) => d.claimed(a).catch(() => null))
+    );
+    chunk.forEach((a, j) => out.set(a.toLowerCase(), vals[j]));
+  }
+  return out;
 }
 
 export async function getTokenBalance(signer, address) {

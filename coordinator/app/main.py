@@ -887,6 +887,109 @@ def job_result(jid: str, req: JobResultReq, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@app.get("/nodes")
+def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
+               status: str = "all", db: Session = Depends(get_db)):
+    """Every registered operator, for the public node page.
+
+    Deliberately unauthenticated and address-keyed: the point of the page is that
+    anyone can take a row's address to the explorer and check the network's
+    claims against the chain. Nothing here is private — addresses and claimed
+    amounts are already public on chain; this only saves the reader from
+    reconstructing the list by hand.
+
+    `verified_tasks` counts quorum slots this node answered and agreed with the
+    majority on. That is the honest measure of work done: `jobs_done` counts
+    *paid* jobs only, and almost nothing has been bought yet, so a page showing
+    only that column would read as a dead network when it is in fact busy.
+    """
+    now = time.time()
+    nodes = db.query(Node).all()
+
+    # One aggregate for the whole table rather than a count per row — this runs
+    # on every page load, and the per-row version is 200+ queries.
+    agreed = dict(
+        db.query(QuorumResult.node_address, func.count(QuorumResult.id))
+        .filter(QuorumResult.verdict == "agreed")
+        .group_by(QuorumResult.node_address)
+        .all()
+    )
+    # Addresses are stored as the operator sent them, so the join has to be
+    # case-insensitive or half the counts land on the wrong row.
+    agreed_lower = {}
+    for addr, n in agreed.items():
+        agreed_lower[addr.lower()] = agreed_lower.get(addr.lower(), 0) + n
+
+    rows = []
+    for n in nodes:
+        online = bool(n.last_heartbeat) and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S
+        pending = n.contribution_minutes * REWARD_PER_MINUTE + n.work_thkt
+        rows.append({
+            "address": n.address,
+            # Operator-supplied free text. Truncated because it is displayed and
+            # nothing validates it on the way in.
+            "node_id": (n.node_id or "")[:48],
+            "online": online,
+            "last_heartbeat": n.last_heartbeat or None,
+            "seen_s_ago": round(now - n.last_heartbeat, 1) if n.last_heartbeat else None,
+            "capabilities": [c for c in (n.capabilities or "").split(",") if c],
+            "lifetime_minutes": round(n.lifetime_minutes, 2),
+            "verified_tasks": agreed_lower.get(n.address.lower(), 0),
+            "failed_challenges": n.failed_challenges,
+            "jobs_done": n.jobs_done,
+            "settled_thkt": round(n.cumulative_reward, 6),   # in the last root, claimable
+            "pending_thkt": round(pending, 6),               # this epoch, not yet claimable
+            "earned_thkt": round(n.cumulative_reward + pending, 6),
+        })
+
+    if status == "online":
+        rows = [r for r in rows if r["online"]]
+    elif status == "offline":
+        rows = [r for r in rows if not r["online"]]
+
+    keys = {
+        "earned": lambda r: r["earned_thkt"],
+        "uptime": lambda r: r["lifetime_minutes"],
+        "tasks": lambda r: r["verified_tasks"],
+        "jobs": lambda r: r["jobs_done"],
+        "seen": lambda r: -(r["seen_s_ago"] if r["seen_s_ago"] is not None else 1e12),
+    }
+    key = keys.get(sort, keys["earned"])
+    # Online first regardless of sort: a page about who is available now should
+    # not open on a screenful of nodes that left last week.
+    rows.sort(key=lambda r: (r["online"], key(r)), reverse=True)
+
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    page = rows[offset:offset + limit]
+
+    return {
+        "total": len(nodes),
+        "online": sum(1 for n in nodes
+                      if n.last_heartbeat and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S),
+        "matched": len(rows),
+        "limit": limit,
+        "offset": offset,
+        "sort": sort if sort in keys else "earned",
+        "status": status,
+        "heartbeat_timeout_s": HEARTBEAT_TIMEOUT_S,
+        "reward_per_minute": REWARD_PER_MINUTE,
+        "network": {
+            "lifetime_minutes": round(sum(n.lifetime_minutes for n in nodes), 2),
+            "verified_tasks": sum(agreed_lower.values()),
+            "jobs_done": sum(n.jobs_done for n in nodes),
+            "earned_thkt": round(sum(n.cumulative_reward + n.contribution_minutes
+                                     * REWARD_PER_MINUTE + n.work_thkt for n in nodes), 6),
+        },
+        # The page reads `claimed(address)` straight from this contract in the
+        # browser, so the reader verifies the claimed column against the chain
+        # rather than taking the coordinator's word for it.
+        "distributor": chain.distributor_addr,
+        "generated_at": now,
+        "nodes": page,
+    }
+
+
 @app.get("/quorums")
 def list_quorums(limit: int = 20, db: Session = Depends(get_db)):
     """Recent quorums and how they landed — the audit trail for verification."""

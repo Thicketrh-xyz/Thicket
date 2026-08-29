@@ -172,6 +172,7 @@ export default function Home() {
           <BrandMark />
           <div className="nav-links">
             <a href="#network">Network</a>
+            <a href="/nodes">Nodes</a>
             <a href="#verification">How it works</a>
             <a href="#roadmap">Roadmap</a>
             <a href="https://www.thicketrh.xyz/docs">Docs</a>
@@ -194,6 +195,7 @@ export default function Home() {
         {menuOpen && (
           <div className="mobile-nav">
             <a href="#network" onClick={closeMenu}>Network</a>
+            <a href="/nodes" onClick={closeMenu}>Nodes</a>
             <a href="#verification" onClick={closeMenu}>How it works</a>
             <a href="#roadmap" onClick={closeMenu}>Roadmap</a>
             <a href="https://www.thicketrh.xyz/docs" onClick={closeMenu}>Docs</a>
