@@ -203,7 +203,10 @@ def health():
     # first close there is nothing to judge, so a fresh process stays ok.
     if ago is not None and EPOCH_SECONDS > 0 and ago > EPOCH_SECONDS * 3:
         problems.append("no epoch closed recently")
-    if gas["publishes_left"] is not None and gas["publishes_left"] < 100:
+    # Warn in hours, not publishes: the same 100 publishes is four days of notice
+    # at hourly epochs and 100 minutes at EPOCH_SECONDS=60. A day is enough time
+    # to notice and top the wallet up at either setting.
+    if gas["hours_left"] is not None and gas["hours_left"] < 24:
         problems.append("publisher low on gas")
 
     return {
