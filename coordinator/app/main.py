@@ -46,6 +46,9 @@ app.add_middleware(
 # (see heartbeat()), so a timeout below the beat interval silently credits every
 # operator nothing at all — the default is part of the contract, not a knob.
 HEARTBEAT_TIMEOUT_S = int(os.getenv("HEARTBEAT_TIMEOUT_S", "300"))
+# Server-side floor on how often a node's beat is actually processed. Off by
+# default; the node client's own interval is the primary control.
+HEARTBEAT_MIN_INTERVAL_S = int(os.getenv("HEARTBEAT_MIN_INTERVAL_S", "0"))
 CHALLENGE_INTERVAL_S = int(os.getenv("CHALLENGE_INTERVAL_S", "600"))
 CHALLENGE_SIZE = int(os.getenv("CHALLENGE_SIZE", "128"))
 MAX_FAILS_BEFORE_SLASH = int(os.getenv("MAX_FAILS_BEFORE_SLASH", "3"))
@@ -346,6 +349,17 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
         raise HTTPException(401, "bad signature")
 
     now = time.time()
+    # Throttle: a beat arriving sooner than this after the node's last one is
+    # acknowledged and dropped without doing any of the expensive work below.
+    # Costs the operator nothing — uptime is credited from elapsed time, so the
+    # next accepted beat pays for the whole gap. 0 disables it.
+    if (HEARTBEAT_MIN_INTERVAL_S and node.last_heartbeat
+            and (now - node.last_heartbeat) < HEARTBEAT_MIN_INTERVAL_S):
+        return {"ok": True, "throttled": True,
+                "minutes": round(node.contribution_minutes, 4),
+                "next_beat_in": round(HEARTBEAT_MIN_INTERVAL_S - (now - node.last_heartbeat)),
+                "challenge": None, "jobs": []}
+
     if node.last_heartbeat and (now - node.last_heartbeat) <= HEARTBEAT_TIMEOUT_S:
         elapsed_min = (now - node.last_heartbeat) / 60.0
         node.contribution_minutes += elapsed_min
