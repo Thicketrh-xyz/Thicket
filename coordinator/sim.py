@@ -171,8 +171,72 @@ def scenario_straggler(db) -> None:
     check("settled on two votes", q.status, "settled")
     check("straggler not struck", nodes[2].row.failed_challenges, 0)
     check("straggler keeps its minutes", nodes[2].row.contribution_minutes > 0, True)
-    check("straggler has no verdict",
-          db.get(QuorumResult, f"{q.id}:{nodes[2].address.lower()}").verdict, "pending")
+    # 'absent', not 'pending': the quorum is closed, so the slot is finished
+    # with. A row left on 'pending' outlives its quorum, and close_epoch's
+    # holdback then excludes that operator from settlement forever.
+    check("straggler marked absent, not wrong",
+          db.get(QuorumResult, f"{q.id}:{nodes[2].address.lower()}").verdict, "absent")
+
+    # The regression that matters: a node that missed one challenge must still
+    # settle. This stranded 2.4M THKT across roughly half the live network.
+    before = nodes[2].row.contribution_minutes
+    close_epoch()
+    db.expire_all()
+    straggler = db.get(Node, nodes[2].address)
+    check("straggler's minutes were settled, not stranded",
+          straggler.contribution_minutes, 0.0)
+    check("straggler's earnings became claimable",
+          round(straggler.cumulative_reward, 6) >= round(before, 6), True)
+
+
+def scenario_orphaned_slot(db) -> None:
+    """A pending slot on a quorum that already closed must not block settlement.
+
+    This is the shape of the live bug: settle() used to leave a non-answering
+    node on 'pending' forever, and close_epoch held back every node with any
+    pending row regardless of its quorum's state. One missed challenge and the
+    operator never settled again. 2.4M THKT was stranded across roughly half the
+    network before it was found.
+    """
+    print("\n[3b] an orphaned pending slot must not strand an operator forever")
+    _reset(db)
+    node = VirtualNode(db, 0)
+    node.beat()
+
+    row = db.get(Node, node.address)
+    row.contribution_minutes = 42.0
+    # A closed quorum carrying a slot this node never answered — exactly what a
+    # deadline-settled quorum left behind before the fix.
+    q = Quorum(id="orphan-q", kind="challenge", ref="", seed=1, size=1, required=3,
+               deadline=time.time() - 999, status="settled", created_at=time.time() - 999,
+               settled_at=time.time() - 999)
+    db.add(q)
+    db.add(QuorumResult(id=f"orphan-q:{node.address.lower()}", quorum_id="orphan-q",
+                        node_address=node.address, output_hash="", verdict="pending"))
+    db.commit()
+
+    close_epoch()
+    db.expire_all()
+    settled = db.get(Node, node.address)
+    check("orphaned slot does not block settlement", settled.contribution_minutes, 0.0)
+    check("stranded minutes became claimable", round(settled.cumulative_reward, 6), 42.0)
+
+    # ...while a genuinely open quorum still holds the node back, which is the
+    # whole point of the holdback: unsettled minutes can still be voided.
+    _reset(db)
+    node = VirtualNode(db, 0)
+    node.beat()
+    db.get(Node, node.address).contribution_minutes = 7.0
+    db.add(Quorum(id="open-q", kind="challenge", ref="", seed=1, size=1, required=3,
+                  deadline=time.time() + 999, status="open", created_at=time.time()))
+    db.add(QuorumResult(id=f"open-q:{node.address.lower()}", quorum_id="open-q",
+                        node_address=node.address, output_hash="", verdict="pending"))
+    db.commit()
+    close_epoch()
+    db.expire_all()
+    held = db.get(Node, node.address)
+    check("an open quorum still holds settlement back", held.contribution_minutes, 7.0)
+    check("nothing became claimable while awaiting a verdict", held.cumulative_reward, 0.0)
 
 
 def scenario_too_few_nodes(db) -> None:
@@ -532,6 +596,7 @@ def run() -> None:
     coord.HEARTBEAT_TIMEOUT_S = 10_000    # never time out mid-simulation
     try:
         for scenario in (scenario_majority, scenario_inconclusive, scenario_straggler,
+                         scenario_orphaned_slot,
                          scenario_too_few_nodes, scenario_slash, scenario_job_quorum,
                          scenario_broken_node, scenario_epoch_holdback,
                          scenario_no_double_dispatch, scenario_fresh_node_joins,

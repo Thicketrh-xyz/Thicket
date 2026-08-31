@@ -222,6 +222,9 @@ def settle(db, q: Quorum, *, on_agree=None, on_disagree=None) -> dict:
     if consensus is None:
         q.status = "inconclusive"
         q.settled_at = time.time()
+        for r in db.query(QuorumResult).filter(QuorumResult.quorum_id == q.id).all():
+            if r.verdict == "pending" and not r.output_hash:
+                r.verdict = "absent"
         # Punish nobody. All k differing is exactly what honest nondeterminism
         # looks like, and re-running it on fresh nodes is the safe response.
         return {"id": q.id, "status": q.status, "votes": len(rows),
@@ -240,6 +243,14 @@ def settle(db, q: Quorum, *, on_agree=None, on_disagree=None) -> dict:
             disagreed.append(r.node_address)
             if on_disagree:
                 on_disagree(db, r.node_address, q)
+
+    # Everyone who never answered gets a terminal verdict. Leaving them on
+    # 'pending' after the quorum has closed is what stranded operators in
+    # settlement: the row outlives the quorum and nothing ever clears it.
+    # 'absent' is not a strike — it is still "absent, not wrong".
+    for r in db.query(QuorumResult).filter(QuorumResult.quorum_id == q.id).all():
+        if r.verdict == "pending" and not r.output_hash:
+            r.verdict = "absent"
 
     q.status = "settled"
     q.consensus = consensus

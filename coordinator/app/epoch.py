@@ -14,7 +14,7 @@ import time
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from .chain import ChainBridge
-from .db import Counter, Delegation, Node, QuorumResult, session_scope
+from .db import Counter, Delegation, Node, Quorum, QuorumResult, session_scope
 from .merkle import MerkleTree
 
 REWARD_PER_MINUTE = float(os.getenv("REWARD_PER_MINUTE", "1.0"))
@@ -121,8 +121,18 @@ def close_epoch() -> dict:
         for d in db.query(Delegation).filter(Delegation.amount > 0).all():
             by_operator.setdefault(d.operator.lower(), []).append(d)
 
-        awaiting = {r.node_address for r in
-                    db.query(QuorumResult).filter(QuorumResult.verdict == "pending").all()}
+        # Only nodes awaiting a verdict on a quorum that is STILL OPEN. This used
+        # to select every pending row regardless of its quorum's state, and
+        # settle() leaves a node that never answered on 'pending' forever — so a
+        # single missed challenge excluded an operator from settlement
+        # permanently. Their minutes accrued and never became claimable: 2.4M
+        # THKT was stranded this way, across roughly half the network.
+        awaiting = {addr for (addr,) in
+                    db.query(QuorumResult.node_address)
+                      .join(Quorum, Quorum.id == QuorumResult.quorum_id)
+                      .filter(QuorumResult.verdict == "pending",
+                              Quorum.status == "open")
+                      .all()}
         nodes = db.query(Node).all()
         held = 0
         paid_out = 0.0
@@ -137,7 +147,13 @@ def close_epoch() -> dict:
             node.work_thkt = 0.0
 
             delegations = by_operator.get(node.address.lower(), [])
-            self_stake, _ = _chain.operator_stake(node.address)
+            # One chain read per node per epoch is one read too many: at 1,400
+            # nodes and 60-second epochs that is 1,400 eth_calls a minute, inside
+            # the transaction, while holding a pool connection. Self-stake only
+            # affects the answer when there is delegated stake to weigh it
+            # against — split_earnings returns the whole amount untouched
+            # otherwise — so nodes with no delegations skip the call entirely.
+            self_stake = _chain.operator_stake(node.address)[0] if delegations else 0.0
             operator_share, delegator_shares = split_earnings(earned, self_stake, delegations)
 
             node.cumulative_reward += operator_share
