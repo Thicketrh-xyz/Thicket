@@ -185,6 +185,15 @@ def refresh_gas_cache() -> None:
 _POOL_REFRESH_S = 30
 _pool_cache: dict = {"at": 0.0, "value": 0.0}
 
+# /nodes is a public page that every visitor polls. Building its row set means
+# reading every node and aggregating the whole quorum_results table, so without
+# this each visitor would pay for a full scan and hold a connection while doing
+# it — the shape of load that already saturated this service once today. One
+# build is shared by everyone for NODES_TTL_S; the numbers move on a 60s epoch
+# anyway, so nothing meaningful is lost.
+NODES_TTL_S = float(os.getenv("NODES_TTL_S", "10"))
+_nodes_cache: dict = {"at": 0.0, "rows": None, "totals": None}
+
 
 def refresh_pool_cache() -> None:
     """Scheduler job: re-read the rewards pool balance from chain."""
@@ -938,6 +947,11 @@ def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
     only that column would read as a dead network when it is in fact busy.
     """
     now = time.time()
+    cached = _nodes_cache["rows"]
+    if cached is not None and now - _nodes_cache["at"] < NODES_TTL_S:
+        rows, totals = cached, _nodes_cache["totals"]
+        return _page_nodes(rows, totals, limit, offset, sort, status, dir, now)
+
     nodes = db.query(Node).all()
 
     # One aggregate for the whole table rather than a count per row — this runs
@@ -976,6 +990,30 @@ def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
             "earned_thkt": round(n.cumulative_reward + pending, 6),
         })
 
+    totals = {
+        "total": len(nodes),
+        "online": sum(1 for r in rows if r["online"]),
+        "network": {
+            "lifetime_minutes": round(sum(n.lifetime_minutes for n in nodes), 2),
+            "tasks_executed": (db.get(Counter, "tasks").value
+                               if db.get(Counter, "tasks") else 0),
+            "jobs_queued": db.query(Job).filter(Job.status == "pending").count(),
+            "jobs_active": db.query(Job).filter(
+                Job.status.in_(("assigned", "verifying"))).count(),
+            "pool_thkt": round(_pool_thkt(), 2),
+            "verified_tasks": sum(agreed_lower.values()),
+            "jobs_done": sum(n.jobs_done for n in nodes),
+            "earned_thkt": round(sum(r["earned_thkt"] for r in rows), 6),
+        },
+    }
+    _nodes_cache.update(at=now, rows=rows, totals=totals)
+    return _page_nodes(rows, totals, limit, offset, sort, status, dir, now)
+
+
+# Filtering, sorting and paging all happen on the cached row set, so a second
+# visitor a moment later costs no database work at all.
+def _page_nodes(all_rows, totals, limit, offset, sort, status, dir, now) -> dict:
+    rows = all_rows
     if status == "online":
         rows = [r for r in rows if r["online"]]
     elif status == "offline":
@@ -1002,9 +1040,8 @@ def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
     page = rows[offset:offset + limit]
 
     return {
-        "total": len(nodes),
-        "online": sum(1 for n in nodes
-                      if n.last_heartbeat and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S),
+        "total": totals["total"],
+        "online": totals["online"],
         "matched": len(rows),
         "limit": limit,
         "offset": offset,
@@ -1013,19 +1050,7 @@ def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
         "status": status,
         "heartbeat_timeout_s": HEARTBEAT_TIMEOUT_S,
         "reward_per_minute": REWARD_PER_MINUTE,
-        "network": {
-            "lifetime_minutes": round(sum(n.lifetime_minutes for n in nodes), 2),
-            "tasks_executed": (db.get(Counter, "tasks").value
-                               if db.get(Counter, "tasks") else 0),
-            "jobs_queued": db.query(Job).filter(Job.status == "pending").count(),
-            "jobs_active": db.query(Job).filter(
-                Job.status.in_(("assigned", "verifying"))).count(),
-            "pool_thkt": round(_pool_thkt(), 2),
-            "verified_tasks": sum(agreed_lower.values()),
-            "jobs_done": sum(n.jobs_done for n in nodes),
-            "earned_thkt": round(sum(n.cumulative_reward + n.contribution_minutes
-                                     * REWARD_PER_MINUTE + n.work_thkt for n in nodes), 6),
-        },
+        "network": totals["network"],
         # The page reads `claimed(address)` straight from this contract in the
         # browser, so the reader verifies the claimed column against the chain
         # rather than taking the coordinator's word for it.
