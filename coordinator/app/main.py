@@ -41,7 +41,11 @@ app.add_middleware(
 )
 
 # --- config ---
-HEARTBEAT_TIMEOUT_S = int(os.getenv("HEARTBEAT_TIMEOUT_S", "90"))
+# Must stay comfortably above the node client's heartbeat_interval (120s).
+# Uptime is credited only when the gap since the last beat is within this window
+# (see heartbeat()), so a timeout below the beat interval silently credits every
+# operator nothing at all — the default is part of the contract, not a knob.
+HEARTBEAT_TIMEOUT_S = int(os.getenv("HEARTBEAT_TIMEOUT_S", "300"))
 CHALLENGE_INTERVAL_S = int(os.getenv("CHALLENGE_INTERVAL_S", "600"))
 CHALLENGE_SIZE = int(os.getenv("CHALLENGE_SIZE", "128"))
 MAX_FAILS_BEFORE_SLASH = int(os.getenv("MAX_FAILS_BEFORE_SLASH", "3"))

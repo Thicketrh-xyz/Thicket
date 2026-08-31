@@ -13,8 +13,8 @@ export function RunNode() {
           <tr><th>GPU</th><td>Not required. Uptime and challenges are CPU work. A GPU makes <em>paid jobs</em> faster.</td></tr>
           <tr><th>RAM</th><td>8GB serves <code>llama3.2:1b</code> text jobs. Vision (<code>llava:7b</code>) wants 16GB. A node sizes its context window to the job up to 32k tokens on a long document and that is where memory goes. Lower it with <code>THICKET_MAX_CTX</code>.</td></tr>
           <tr><th>Disk</th><td>~2GB for the text model, ~5GB for vision, plus room for Ollama itself.</td></tr>
-          <tr><th>Bandwidth</th><td>Light. A heartbeat every 30s and job payloads; a vision job carries a base64 image.</td></tr>
-          <tr><th>Uptime</th><td>Miss 90s of heartbeats and you're offline for that gap. No penalty — you just earn nothing for it.</td></tr>
+          <tr><th>Bandwidth</th><td>Light. A heartbeat every 120s and job payloads; a vision job carries a base64 image.</td></tr>
+          <tr><th>Uptime</th><td>Miss 300s of heartbeats and you're offline for that gap. No penalty — you just earn nothing for it. Uptime pays for elapsed time between beats, so a slower interval earns the same.</td></tr>
         </tbody>
       </table>
       <p>Cloud GPU hosts (Vast, RunPod and similar) will run the client fine — it's a normal Python process talking outbound HTTP, with no inbound ports. Weigh the rental cost against what the network actually pays before doing it.</p>

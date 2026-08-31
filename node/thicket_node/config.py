@@ -73,7 +73,13 @@ class Config:
     private_key: str = ""
     node_id: str = "node-1"
     coordinator_url: str = "https://thicket-production.up.railway.app"
-    heartbeat_interval: int = 30
+    # 120s, not 30s. Every node beating four times a minute is what saturated the
+    # coordinator's connection pool at network scale — 1,336 nodes at 30s is 45
+    # requests a second. Uptime is credited from elapsed time between beats, not
+    # per beat, so a slower interval earns exactly the same. The coordinator's
+    # HEARTBEAT_TIMEOUT_S must stay comfortably above this: a gap longer than the
+    # timeout credits nothing at all.
+    heartbeat_interval: int = 120
 
     # on-chain bonding (blank addresses => bonding skipped)
     rpc_url: str = "https://rpc.mainnet.chain.robinhood.com/rpc"
@@ -91,7 +97,7 @@ class Config:
             private_key=_clean(os.getenv("THICKET_PRIVATE_KEY")) or keychain_key(),
             node_id=_clean(os.getenv("NODE_ID")) or "node-1",
             coordinator_url=_clean(os.getenv("COORDINATOR_URL")) or cls.coordinator_url,
-            heartbeat_interval=int(_clean(os.getenv("HEARTBEAT_INTERVAL")) or 30),
+            heartbeat_interval=int(_clean(os.getenv("HEARTBEAT_INTERVAL")) or cls.heartbeat_interval),
             rpc_url=_clean(os.getenv("ROBINHOOD_RPC")) or cls.rpc_url,
             token_address=_clean(os.getenv("TOKEN_ADDRESS")) or cls.token_address,
             staking_address=_clean(os.getenv("STAKING_ADDRESS")) or cls.staking_address,
