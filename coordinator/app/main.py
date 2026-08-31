@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import threading
 import time
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -200,6 +201,14 @@ _pool_cache: dict = {"at": 0.0, "value": 0.0}
 # anyway, so nothing meaningful is lost.
 NODES_TTL_S = float(os.getenv("NODES_TTL_S", "10"))
 _nodes_cache: dict = {"at": 0.0, "rows": None, "totals": None}
+# One rebuild at a time. Without this the cache is check-then-fill: the moment
+# it expires, every concurrent request sees it stale and they ALL run the full
+# rebuild — every node row plus an aggregate over half a million quorum results
+# — each holding a pool connection. That is self-reinforcing, because the more
+# builds run at once the slower each gets and the more requests pile in behind
+# them. Whoever wins the lock rebuilds; everyone else serves the stale copy,
+# which is seconds out of date and perfectly good.
+_nodes_lock = threading.Lock()
 
 
 def refresh_pool_cache() -> None:
@@ -972,9 +981,27 @@ def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
     now = time.time()
     cached = _nodes_cache["rows"]
     if cached is not None and now - _nodes_cache["at"] < NODES_TTL_S:
-        rows, totals = cached, _nodes_cache["totals"]
-        return _page_nodes(rows, totals, limit, offset, sort, status, dir, now)
+        return _page_nodes(cached, _nodes_cache["totals"], limit, offset, sort, status, dir, now)
 
+    if not _nodes_lock.acquire(blocking=False):
+        # Another request is already rebuilding. Serve what we have rather than
+        # starting a second scan; only a cold cache has nothing to fall back on.
+        if cached is not None:
+            return _page_nodes(cached, _nodes_cache["totals"], limit, offset, sort, status, dir, now)
+        _nodes_lock.acquire()
+    try:
+        # The winner of a race may arrive here after the build it was waiting on
+        # already finished.
+        now = time.time()
+        cached = _nodes_cache["rows"]
+        if cached is not None and now - _nodes_cache["at"] < NODES_TTL_S:
+            return _page_nodes(cached, _nodes_cache["totals"], limit, offset, sort, status, dir, now)
+        return _build_nodes(db, limit, offset, sort, status, dir, now)
+    finally:
+        _nodes_lock.release()
+
+
+def _build_nodes(db, limit, offset, sort, status, dir, now) -> dict:
     nodes = db.query(Node).all()
 
     # One aggregate for the whole table rather than a count per row — this runs
