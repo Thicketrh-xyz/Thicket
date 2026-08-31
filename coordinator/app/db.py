@@ -199,6 +199,20 @@ _BACKFILL = {
 # Columns whose type outgrew the original definition (VARCHAR -> TEXT).
 _WIDENED = [("jobs", "prompt"), ("jobs", "result")]
 
+# Indexes the ORM does not declare, added by hand because create_all() will not
+# touch a table that already exists.
+#
+# quorum_results grows without bound — one row per node per task, already past
+# half a million — and the node page groups it by node_address filtered on
+# verdict, while epoch settlement joins it filtered on verdict. Neither had an
+# index on verdict, so both were full scans of the whole table, several times a
+# minute, each holding a pool connection while it ran. That is how the
+# coordinator kept running out of connections.
+_INDEXES = [
+    ("ix_quorum_results_verdict_node", "quorum_results", "(verdict, node_address)"),
+    ("ix_quorum_results_verdict_quorum", "quorum_results", "(verdict, quorum_id)"),
+]
+
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
@@ -220,6 +234,10 @@ def init_db() -> None:
             for table, column in _WIDENED:
                 if insp.has_table(table):
                     conn.execute(text(f"ALTER TABLE {table} ALTER COLUMN {column} TYPE TEXT"))
+
+        for name, table, cols in _INDEXES:
+            if insp.has_table(table):
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} {cols}"))
 
 
 def session_scope():
