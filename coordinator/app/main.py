@@ -121,6 +121,7 @@ def _startup():
     start_scheduler()
     schedule(sweep_quorums, qm.QUORUM_DEADLINE_S, "sweep_quorums")
     schedule(refresh_gas_cache, _GAS_REFRESH_S, "refresh_gas")
+    schedule(refresh_pool_cache, _POOL_REFRESH_S, "refresh_pool")
 
 
 def get_db():
@@ -175,6 +176,32 @@ def refresh_gas_cache() -> None:
                           cost=chain.publish_cost())
     except Exception:  # noqa: BLE001 — a stale reading beats a dead health check
         pass
+
+
+# chain.pool_balance() is an eth_call, and /stats is polled every few seconds by
+# the portal and the node page. Refreshed on the scheduler like the gas reading,
+# with one lazy first fill so a freshly restarted process doesn't report a pool
+# of zero until the first tick.
+_POOL_REFRESH_S = 30
+_pool_cache: dict = {"at": 0.0, "value": 0.0}
+
+
+def refresh_pool_cache() -> None:
+    """Scheduler job: re-read the rewards pool balance from chain."""
+    try:
+        value = chain.pool_balance()
+        _pool_cache.update(at=time.time(), value=value)
+    except Exception:  # noqa: BLE001 — keep the last good reading
+        pass
+
+
+def _pool_thkt() -> float:
+    if not _pool_cache["at"]:
+        # Claim the slot before the read, so concurrent first callers don't all
+        # go to the RPC together — the stampede that made /health block.
+        _pool_cache["at"] = time.time()
+        refresh_pool_cache()
+    return _pool_cache["value"]
 
 
 def _gas_runway() -> dict:
@@ -253,12 +280,19 @@ def stats(db: Session = Depends(get_db)):
     total_jobs_done = sum(n.jobs_done for n in nodes)
     tasks = db.get(Counter, "tasks")
     jobs_running = db.query(Job).filter(Job.status.in_(("pending", "assigned", "verifying"))).count()
+    # jobs_running has always meant "anything in flight" and the landing page and
+    # portal both read it, so it keeps that meaning. These two split it into the
+    # disjoint halves a dashboard actually wants to show side by side.
+    jobs_queued = db.query(Job).filter(Job.status == "pending").count()
+    jobs_active = db.query(Job).filter(Job.status.in_(("assigned", "verifying"))).count()
     verified = db.query(Quorum).filter(Quorum.status == "settled").count()
     return {
         "nodes": len(nodes),                                   # operators ever registered
         "active_nodes": online,                                # heartbeating right now
         "tasks_executed": tasks.value if tasks else 0,         # cumulative challenges + jobs
         "jobs_running": jobs_running,                          # compute jobs in flight
+        "jobs_queued": jobs_queued,                            # paid, waiting for a node
+        "jobs_active": jobs_active,                            # handed out, being worked on
         "verified_tasks": verified,                            # settled by k-node majority
         "quorum_k": QUORUM_K,                                  # nodes per quorum
         "spot_check_rate": qm.SPOT_CHECK_RATE,                 # share of paid work cross-checked
@@ -266,7 +300,7 @@ def stats(db: Session = Depends(get_db)):
         "jobs_completed": total_jobs_done,
         "revenue_share": OPERATOR_REVENUE_SHARE,
         "thkt_earned": round(total_earned, 2),
-        "pool_thkt": round(chain.pool_balance(), 2),           # rewards pool balance (on-chain)
+        "pool_thkt": round(_pool_thkt(), 2),                   # rewards pool balance (on-chain, cached)
         "capabilities": sorted({c for n in nodes if n.last_heartbeat
                                 and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S
                                 for c in (n.capabilities or "").split(",") if c}),
@@ -889,7 +923,7 @@ def job_result(jid: str, req: JobResultReq, db: Session = Depends(get_db)):
 
 @app.get("/nodes")
 def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
-               status: str = "all", db: Session = Depends(get_db)):
+               status: str = "all", dir: str = "desc", db: Session = Depends(get_db)):
     """Every registered operator, for the public node page.
 
     Deliberately unauthenticated and address-keyed: the point of the page is that
@@ -955,9 +989,13 @@ def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
         "seen": lambda r: -(r["seen_s_ago"] if r["seen_s_ago"] is not None else 1e12),
     }
     key = keys.get(sort, keys["earned"])
-    # Online first regardless of sort: a page about who is available now should
-    # not open on a screenful of nodes that left last week.
-    rows.sort(key=lambda r: (r["online"], key(r)), reverse=True)
+    descending = dir != "asc"
+    # Online first regardless of direction: a page about who is available now
+    # should not open on a screenful of nodes that left last week. Only the
+    # metric flips when someone asks for ascending — otherwise "lowest earners"
+    # would just be a list of the departed.
+    rows.sort(key=lambda r: key(r), reverse=descending)
+    rows.sort(key=lambda r: r["online"], reverse=True)
 
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
@@ -971,11 +1009,18 @@ def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
         "limit": limit,
         "offset": offset,
         "sort": sort if sort in keys else "earned",
+        "dir": "desc" if descending else "asc",
         "status": status,
         "heartbeat_timeout_s": HEARTBEAT_TIMEOUT_S,
         "reward_per_minute": REWARD_PER_MINUTE,
         "network": {
             "lifetime_minutes": round(sum(n.lifetime_minutes for n in nodes), 2),
+            "tasks_executed": (db.get(Counter, "tasks").value
+                               if db.get(Counter, "tasks") else 0),
+            "jobs_queued": db.query(Job).filter(Job.status == "pending").count(),
+            "jobs_active": db.query(Job).filter(
+                Job.status.in_(("assigned", "verifying"))).count(),
+            "pool_thkt": round(_pool_thkt(), 2),
             "verified_tasks": sum(agreed_lower.values()),
             "jobs_done": sum(n.jobs_done for n in nodes),
             "earned_thkt": round(sum(n.cumulative_reward + n.contribution_minutes
