@@ -941,10 +941,15 @@ def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
     amounts are already public on chain; this only saves the reader from
     reconstructing the list by hand.
 
-    `verified_tasks` counts quorum slots this node answered and agreed with the
-    majority on. That is the honest measure of work done: `jobs_done` counts
-    *paid* jobs only, and almost nothing has been bought yet, so a page showing
-    only that column would read as a dead network when it is in fact busy.
+    Two different verification counts, deliberately named apart:
+    `network.verified_tasks` counts settled quorums (matching /stats), while a
+    node's `verified_answers` counts the slots *it* answered in agreement with
+    the majority. With k=3 the second is roughly three times the first, so
+    giving them one name made the page contradict itself.
+
+    Either is a better measure of work done than `jobs_done`, which counts paid
+    jobs only — almost nothing has been bought, so a page leading with that
+    would read as a dead network when it is in fact busy.
     """
     now = time.time()
     cached = _nodes_cache["rows"]
@@ -982,7 +987,9 @@ def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
             "seen_s_ago": round(now - n.last_heartbeat, 1) if n.last_heartbeat else None,
             "capabilities": [c for c in (n.capabilities or "").split(",") if c],
             "lifetime_minutes": round(n.lifetime_minutes, 2),
-            "verified_tasks": agreed_lower.get(n.address.lower(), 0),
+            # This node's answers that matched the majority — a different unit
+            # from the network's quorum count, so a different name.
+            "verified_answers": agreed_lower.get(n.address.lower(), 0),
             "failed_challenges": n.failed_challenges,
             "jobs_done": n.jobs_done,
             "settled_thkt": round(n.cumulative_reward, 6),   # in the last root, claimable
@@ -1001,7 +1008,13 @@ def list_nodes(limit: int = 50, offset: int = 0, sort: str = "earned",
             "jobs_active": db.query(Job).filter(
                 Job.status.in_(("assigned", "verifying"))).count(),
             "pool_thkt": round(_pool_thkt(), 2),
-            "verified_tasks": sum(agreed_lower.values()),
+            # Count settled quorums, exactly as /stats does. Summing the
+            # per-node agreed answers instead reported ~3x higher (k=3 nodes
+            # answer each quorum) under the same name as the landing page's
+            # figure, and exceeded "tasks executed" on the same screen, which is
+            # impossible on its face.
+            "verified_tasks": db.query(Quorum).filter(Quorum.status == "settled").count(),
+            "verified_answers": sum(agreed_lower.values()),
             "jobs_done": sum(n.jobs_done for n in nodes),
             "earned_thkt": round(sum(r["earned_thkt"] for r in rows), 6),
         },
@@ -1022,7 +1035,7 @@ def _page_nodes(all_rows, totals, limit, offset, sort, status, dir, now) -> dict
     keys = {
         "earned": lambda r: r["earned_thkt"],
         "uptime": lambda r: r["lifetime_minutes"],
-        "tasks": lambda r: r["verified_tasks"],
+        "tasks": lambda r: r["verified_answers"],
         "jobs": lambda r: r["jobs_done"],
         "seen": lambda r: -(r["seen_s_ago"] if r["seen_s_ago"] is not None else 1e12),
     }

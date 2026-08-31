@@ -258,7 +258,7 @@ export default function Nodes() {
                   </div>
 
                   <dl className="ncard__grid">
-                    <div><dt>Verified</dt><dd>{num(n.verified_tasks)}</dd></div>
+                    <div><dt>Verified</dt><dd>{num(n.verified_answers)}</dd></div>
                     <div><dt>Jobs</dt><dd>{num(n.jobs_done)}</dd></div>
                     <div><dt>Uptime</dt><dd>{uptime(n.lifetime_minutes)}</dd></div>
                   </dl>
@@ -293,9 +293,10 @@ export default function Nodes() {
           </div>
 
           <p className="hint">
-            <strong>Verified</strong> counts tasks a node answered where its output matched the
-            majority of the nodes given the same task. <strong>Jobs</strong> counts paid compute
-            bought by a customer. <strong>Earned</strong> is what the coordinator has credited,
+            <strong>Verified tasks</strong> above counts tasks the network settled by majority;
+            a card's <strong>Verified</strong> counts the answers <em>that node</em> contributed to
+            them, so the per-node numbers sum higher — three nodes answer each task.
+            <strong>Jobs</strong> counts paid compute bought by a customer. <strong>Earned</strong> is what the coordinator has credited,
             settled and pending; <strong>claimed</strong> is what has actually been withdrawn from
             the RewardsDistributor. Earned above claimed is normal — it means rewards are sitting
             unclaimed.
