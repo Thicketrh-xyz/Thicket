@@ -25,8 +25,8 @@ from sqlalchemy.orm import Session
 from . import quorum as qm
 from . import signing
 from .challenge import make_challenge, verify as verify_challenge
-from .db import (Batch, Counter, Delegation, Job, Node, Quorum, QuorumResult,
-                 SessionLocal, init_db)
+from .db import (Batch, Counter, Delegation, Job, Node, PendingSlash, Quorum,
+                 QuorumResult, SessionLocal, init_db)
 from .epoch import (EPOCH_SECONDS, OPERATOR_COMMISSION, REWARD_PER_MINUTE, chain_bridge,
                     close_epoch, current_claims, last_publish, schedule, start_scheduler,
                     sync_delegations)
@@ -53,7 +53,9 @@ HEARTBEAT_MIN_INTERVAL_S = int(os.getenv("HEARTBEAT_MIN_INTERVAL_S", "0"))
 CHALLENGE_INTERVAL_S = int(os.getenv("CHALLENGE_INTERVAL_S", "600"))
 CHALLENGE_SIZE = int(os.getenv("CHALLENGE_SIZE", "128"))
 MAX_FAILS_BEFORE_SLASH = int(os.getenv("MAX_FAILS_BEFORE_SLASH", "3"))
-SLASH_AMOUNT_WEI = int(float(os.getenv("SLASH_AMOUNT_THKT", "100")) * 10**18)
+SLASH_AMOUNT_THKT = float(os.getenv("SLASH_AMOUNT_THKT", "100"))
+SLASH_AMOUNT_WEI = int(SLASH_AMOUNT_THKT * 10**18)
+SLASH_FLUSH_S = int(os.getenv("SLASH_FLUSH_S", "60"))
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 # Closing registration turns away NEW operators only. An address already in the
 # nodes table is always let through, because the node client re-registers on
@@ -124,6 +126,31 @@ def mark_work_available() -> None:
     _work["available"] = True
 
 
+def flush_slashes() -> int:
+    """Scheduler job: send any slashes verification has decided on.
+
+    Runs only on the worker holding the scheduler lock, so all chain writes
+    happen in one process — which, together with the send lock in ChainBridge,
+    is what keeps nonces from colliding with the epoch publisher.
+    """
+    sent = 0
+    db = SessionLocal()
+    try:
+        for row in db.query(PendingSlash).filter(PendingSlash.sent_tx.is_(None)).limit(20).all():
+            try:
+                tx = chain.slash(row.address, int(row.amount_thkt * 10**18), row.reason)
+            except Exception as exc:  # noqa: BLE001 — retried on the next pass
+                print(f"[slash] {row.address} failed, will retry: {exc}")
+                continue
+            row.sent_tx = tx or "dry"
+            row.sent_at = time.time()
+            sent += 1
+        db.commit()
+    finally:
+        db.close()
+    return sent
+
+
 def requeue_stale_jobs() -> int:
     """Scheduler job: give back work a node took and never returned."""
     db = SessionLocal()
@@ -165,6 +192,7 @@ def _startup():
     start_scheduler()
     schedule(sweep_quorums, qm.QUORUM_DEADLINE_S, "sweep_quorums")
     schedule(requeue_stale_jobs, JOB_ASSIGN_TIMEOUT_S, "requeue_stale_jobs")
+    schedule(flush_slashes, SLASH_FLUSH_S, "flush_slashes")
     schedule(refresh_gas_cache, _GAS_REFRESH_S, "refresh_gas")
     schedule(refresh_pool_cache, _POOL_REFRESH_S, "refresh_pool")
 
@@ -635,7 +663,13 @@ def void_and_strike(db: Session, address: str, reason: str) -> int:
     node.work_thkt = 0.0
     fails = node.failed_challenges
     if fails >= MAX_FAILS_BEFORE_SLASH:
-        chain.slash(node.address, SLASH_AMOUNT_WEI, reason)
+        # Queued, not sent. This runs inside a heartbeat; sending here meant
+        # three RPC round-trips in a request path, holding a pool connection and
+        # a worker thread, and racing the epoch publisher for a nonce on the
+        # same key. flush_slashes drains it on the scheduler.
+        db.add(PendingSlash(id=secrets.token_hex(16), address=node.address,
+                            amount_thkt=SLASH_AMOUNT_THKT, reason=reason[:160],
+                            created_at=time.time()))
         node.failed_challenges = 0
     return fails
 

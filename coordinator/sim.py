@@ -26,7 +26,8 @@ from app import main as coord  # noqa: E402
 from app import quorum as qm  # noqa: E402
 from app import signing  # noqa: E402
 from app.challenge import make_challenge, solve  # noqa: E402
-from app.db import Delegation, Job, Node, Quorum, QuorumResult, SessionLocal, init_db  # noqa: E402
+from app.db import (Delegation, Job, Node, PendingSlash, Quorum, QuorumResult,  # noqa: E402
+                    SessionLocal, init_db)
 from app.epoch import OPERATOR_COMMISSION, close_epoch, split_earnings  # noqa: E402
 
 WRONG = "0x" + "de" * 32
@@ -270,11 +271,24 @@ def scenario_slash(db) -> None:
             solo.answer_challenge(ch, honest=False)
             solo.row.last_challenge_at = 0     # make the node due again
             db.commit()
+        db.expire_all()
+        # The slash is queued inside the request, not sent from it: sending
+        # meant three RPC round-trips in a heartbeat, racing the epoch publisher
+        # for a nonce on the same key.
+        queued = db.query(PendingSlash).filter(PendingSlash.address == solo.address).all()
+        check("one slash queued, none sent from the request", len(queued), 1)
+        check("nothing sent on chain yet", len(slashed), 0)
+        check("strike counter reset once queued", solo.row.failed_challenges, 0)
+
+        # ...and the scheduler drains it.
+        coord.flush_slashes()
+        check("scheduler sent it", len(slashed), 1)
+        db.expire_all()
+        row = db.query(PendingSlash).filter(PendingSlash.address == solo.address).first()
+        check("marked sent, so it is not sent twice", bool(row.sent_tx), True)
+        check("a second flush sends nothing", coord.flush_slashes(), 0)
     finally:
         coord.chain.slash = real_slash
-    db.expire_all()
-    check("slashed once", len(slashed), 1)
-    check("strike counter reset after slashing", solo.row.failed_challenges, 0)
 
 
 def scenario_job_quorum(db) -> None:

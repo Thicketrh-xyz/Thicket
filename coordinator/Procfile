@@ -1,14 +1,22 @@
 # PYTHONUNBUFFERED so stdout logs stream to Railway in real time.
-# --workers 1 because the epoch scheduler runs in-process (multiple workers would double-publish).
 #
-# --limit-concurrency is load shedding, and it is what stops a congestive
-# collapse. Without it uvicorn accepts work without bound: when requests slow
-# down, node clients give up at their own 15s timeout and retry 30 seconds
-# later while the server is STILL working on the request they abandoned.
-# Arrivals then exceed completions and the queue grows forever — measured going
-# 165 -> 591 in-flight in twelve minutes, with worst-case latency 16s -> 49s,
-# with no recovery. Past the cap uvicorn returns 503 straight away without
-# invoking the app, so a shed request costs no worker thread and no database
-# connection. Operators lose nothing: uptime is credited from elapsed time, so
-# a node that is shed now is paid in full by its next accepted beat.
-web: PYTHONUNBUFFERED=1 uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --limit-concurrency ${UVICORN_LIMIT_CONCURRENCY:-100}
+# --workers: the coordinator was CPU-bound on a single process. Measured, one
+# heartbeat costs 6.63ms just to verify its signature, so one core saturates at
+# ~151 beats/sec of signature work alone — and the network generates ~44/sec
+# alongside every other request. One process could not keep up, which is why
+# indexes and caches raised the ceiling without ever reaching it.
+#
+# Multiple workers are only safe because epoch settlement now takes a Postgres
+# advisory lock per run (epoch.py::_cluster_singleton): exactly one worker
+# settles an epoch, the rest return immediately. Two settling at once would
+# double-credit operators and build two transactions with the same nonce on the
+# publisher key.
+#
+# UVICORN_WORKERS is exported, not just interpolated, because db.py divides the
+# connection-pool budget by it — otherwise N workers would open N times the
+# connections and Postgres would refuse them.
+#
+# --limit-concurrency bounds the queue so a slow patch cannot become the
+# congestive collapse it caused before: past the cap uvicorn returns 503 without
+# invoking the app, costing no worker thread and no pool connection.
+web: PYTHONUNBUFFERED=1 UVICORN_WORKERS=${UVICORN_WORKERS:-4} uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${UVICORN_WORKERS:-4} --limit-concurrency ${UVICORN_LIMIT_CONCURRENCY:-100}

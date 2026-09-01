@@ -10,11 +10,14 @@ from __future__ import annotations
 
 import os
 import time
+import zlib
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from sqlalchemy import text
 
 from .chain import ChainBridge
-from .db import Counter, Delegation, Node, Quorum, QuorumResult, session_scope
+from .db import (Counter, Delegation, Node, Quorum, QuorumResult, engine,
+                 session_scope)
 from .merkle import MerkleTree
 
 REWARD_PER_MINUTE = float(os.getenv("REWARD_PER_MINUTE", "1.0"))
@@ -237,12 +240,62 @@ def current_claims(db=None) -> dict:
     return claims
 
 
+def _cluster_singleton(fn, job_id: str, interval_s: float = 0.0):
+    """Wrap a scheduled job so exactly one worker in the cluster runs it.
+
+    With more than one uvicorn worker every process has its own scheduler, and
+    two of them settling the same epoch would double-credit operators and build
+    two transactions with the same nonce on the publisher key. A Postgres
+    advisory lock arbitrates: whoever takes it runs, the others return
+    immediately.
+
+    Taken per run rather than held for the process lifetime, so there is no
+    permanent leader to lose. If the worker that ran the last epoch dies, the
+    next tick is simply won by another one.
+    """
+    # Stable 63-bit key from the job name, so every worker computes the same one.
+    key = zlib.crc32(job_id.encode()) & 0x7FFFFFFF
+
+    counter = f"ran_{job_id}"[:40]
+
+    def wrapped():
+        if engine.dialect.name != "postgresql":
+            return fn()          # sqlite: one process, nothing to arbitrate
+        with engine.connect() as conn:
+            got = conn.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": key}).scalar()
+            if not got:
+                return None
+            try:
+                # Mutual exclusion alone is not enough. Every worker runs its own
+                # timer with its own offset, so they do not collide — they simply
+                # take turns, and the job runs once PER WORKER per interval. With
+                # four workers that quadrupled epoch settlement and the gas that
+                # goes with it. So the last run is recorded in the database and a
+                # tick that arrives too soon after it does nothing.
+                now = time.time()
+                last = conn.execute(text("SELECT value FROM counters WHERE name = :n"),
+                                    {"n": counter}).scalar()
+                if last and interval_s and now - last < interval_s * 0.9:
+                    return None
+                conn.execute(text(
+                    "INSERT INTO counters (name, value) VALUES (:n, :v) "
+                    "ON CONFLICT (name) DO UPDATE SET value = :v"), {"n": counter, "v": int(now)})
+                conn.commit()
+                return fn()
+            finally:
+                conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": key})
+
+    wrapped.__name__ = f"{job_id}_singleton"
+    return wrapped
+
+
 def start_scheduler() -> None:
     global _scheduler
     if _scheduler or EPOCH_SECONDS <= 0:
         return
     _scheduler = BackgroundScheduler(daemon=True)
-    _scheduler.add_job(close_epoch, "interval", seconds=EPOCH_SECONDS, id="close_epoch",
+    _scheduler.add_job(_cluster_singleton(close_epoch, "close_epoch", EPOCH_SECONDS),
+                       "interval", seconds=EPOCH_SECONDS, id="close_epoch",
                        max_instances=1, coalesce=True)
     _scheduler.start()
 
@@ -252,8 +305,8 @@ def schedule(fn, seconds: int, job_id: str) -> None:
     scheduler is disabled)."""
     if not _scheduler or seconds <= 0:
         return
-    _scheduler.add_job(fn, "interval", seconds=seconds, id=job_id,
-                       max_instances=1, coalesce=True)
+    _scheduler.add_job(_cluster_singleton(fn, job_id, seconds), "interval",
+                       seconds=seconds, id=job_id, max_instances=1, coalesce=True)
 
 
 def chain_bridge() -> ChainBridge:

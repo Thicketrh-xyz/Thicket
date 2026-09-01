@@ -17,6 +17,7 @@ with no chain attached.
 from __future__ import annotations
 
 import os
+import threading
 
 try:
     from web3 import Web3
@@ -209,7 +210,16 @@ class ChainBridge:
         return self._send(self.staking.functions.slash(
             Web3.to_checksum_address(operator), amount_wei, reason))
 
+    # Every write reads the nonce, signs and sends. Two of those interleaving
+    # build the SAME nonce and one is silently dropped — which for publish_root
+    # means a frozen Merkle root and claims that revert. One at a time.
+    _send_lock = threading.Lock()
+
     def _send(self, fn):
+        with self._send_lock:
+            return self._send_locked(fn)
+
+    def _send_locked(self, fn):
         tx = fn.build_transaction({
             "from": self.acct.address,
             "nonce": self.w3.eth.get_transaction_count(self.acct.address),

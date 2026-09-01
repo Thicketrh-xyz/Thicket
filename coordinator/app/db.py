@@ -32,9 +32,15 @@ _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite"
 #
 # The short timeout is deliberate: failing fast frees the worker thread, where
 # waiting 30s takes the whole server down with it.
+# DB_POOL_SIZE and DB_MAX_OVERFLOW are the budget for the WHOLE service, split
+# across uvicorn workers — not per process. Each worker builds its own pool, so
+# reading them per process would multiply the real connection count by the
+# worker count and Postgres would start refusing connections, which is a worse
+# failure than queuing for one.
+_WORKERS = max(1, int(os.getenv("UVICORN_WORKERS", "1")))
 _POOL = {} if DATABASE_URL.startswith("sqlite") else {
-    "pool_size": int(os.getenv("DB_POOL_SIZE", "20")),
-    "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "10")),
+    "pool_size": max(2, int(os.getenv("DB_POOL_SIZE", "20")) // _WORKERS),
+    "max_overflow": max(1, int(os.getenv("DB_MAX_OVERFLOW", "10")) // _WORKERS),
     "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "10")),
     "pool_recycle": 1800,
 }
@@ -166,6 +172,31 @@ class QuorumResult(Base):
     verdict: Mapped[str] = mapped_column(String(12), default="pending")  # pending|agreed|disagreed
 
 
+class PendingSlash(Base):
+    """A slash decided by verification, waiting to be sent on chain.
+
+    Slashing used to happen inline inside a heartbeat: three RPC round-trips in
+    a request path, holding a pool connection and a worker thread. Worse, it
+    raced the epoch publisher for nonces on the same key — both call
+    get_transaction_count independently, so a slash landing beside a publish
+    could build two transactions with the same nonce and silently lose one.
+
+    Queued here and drained by the scheduler instead. Durable rather than
+    in-memory because a dropped row is somebody's money.
+
+    amount is THKT, not wei: 100 THKT is 1e20, which overflows a BIGINT.
+    """
+    __tablename__ = "pending_slashes"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    address: Mapped[str] = mapped_column(String(42), index=True)
+    amount_thkt: Mapped[float] = mapped_column(Float, default=0.0)
+    reason: Mapped[str] = mapped_column(String(160), default="")
+    created_at: Mapped[float] = mapped_column(Float, default=0.0)
+    sent_tx: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    sent_at: Mapped[float] = mapped_column(Float, default=0.0)
+
+
 # Columns added after the first deploy. create_all() only creates missing
 # *tables*, so add these by hand if an older database is already live.
 _ADDED = [
@@ -228,7 +259,29 @@ _INDEXES = [
 ]
 
 
+# Schema setup runs in every worker at startup, and concurrent DDL genuinely
+# races: CREATE TABLE IF NOT EXISTS still collides in the Postgres catalog
+# (duplicate key on pg_type), and four workers doing it at once crashed startup
+# outright. A blocking advisory lock serialises it — the first worker builds the
+# schema, the rest wait and then find there is nothing to do. Blocking, not
+# try-lock: a worker that skipped this could start serving before the tables
+# exist.
+_SCHEMA_LOCK_KEY = 0x7C1CE7          # arbitrary, just has to be agreed on
+
+
 def init_db() -> None:
+    if engine.dialect.name != "postgresql":
+        _init_schema()
+        return
+    with engine.connect() as guard:
+        guard.execute(text("SELECT pg_advisory_lock(:k)"), {"k": _SCHEMA_LOCK_KEY})
+        try:
+            _init_schema()
+        finally:
+            guard.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _SCHEMA_LOCK_KEY})
+
+
+def _init_schema() -> None:
     Base.metadata.create_all(engine)
     insp = inspect(engine)
     with engine.begin() as conn:
