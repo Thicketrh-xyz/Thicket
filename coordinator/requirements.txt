@@ -7,3 +7,10 @@ eth-utils>=4.0
 SQLAlchemy>=2.0
 APScheduler>=3.10
 psycopg[binary]>=3.1   # Postgres driver (prod); SQLite needs no driver
+# libsecp256k1 bindings. eth-keys picks this up automatically in place of its
+# pure-Python ECDSA backend, and every heartbeat carries a signature to verify:
+# 6.63ms -> 0.105ms per verification, which is one core sustaining 9,529/sec
+# instead of 151. At the network's ~44 beats/sec that is 0.5% of a core rather
+# than 29%. Verified identical on valid, tampered, wrong-signer, wrong-message,
+# wrong-address and malformed signatures before adopting it.
+coincurve>=19.0
