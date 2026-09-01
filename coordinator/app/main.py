@@ -302,8 +302,15 @@ def _gas_runway() -> dict:
 
 
 @app.get("/health")
-def health():
+async def health():
     """Liveness plus the two things that fail quietly: publishing and gas.
+
+    async on purpose. Sync endpoints run in Starlette's worker threadpool, and
+    when every thread is blocked waiting on a database connection — which is the
+    exact situation this endpoint exists to report — a sync /health cannot get a
+    thread either, so it times out and tells you nothing. Everything here is
+    in-memory (cached gas reading, last publish, timing counters) with no I/O,
+    so it is safe on the event loop and answers even while the pool is starved.
 
     `status` is degraded — not ok — when the last root failed to publish, when no
     epoch has closed in a while, or when the publisher is nearly out of gas. All
