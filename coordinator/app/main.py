@@ -193,8 +193,8 @@ def _startup():
     schedule(sweep_quorums, qm.QUORUM_DEADLINE_S, "sweep_quorums")
     schedule(requeue_stale_jobs, JOB_ASSIGN_TIMEOUT_S, "requeue_stale_jobs")
     schedule(flush_slashes, SLASH_FLUSH_S, "flush_slashes")
-    schedule(refresh_gas_cache, _GAS_REFRESH_S, "refresh_gas")
-    schedule(refresh_pool_cache, _POOL_REFRESH_S, "refresh_pool")
+    schedule(refresh_gas_cache, _GAS_REFRESH_S, "refresh_gas", singleton=False)
+    schedule(refresh_pool_cache, _POOL_REFRESH_S, "refresh_pool", singleton=False)
 
 
 def get_db():

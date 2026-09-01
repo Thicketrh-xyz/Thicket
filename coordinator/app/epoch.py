@@ -300,13 +300,26 @@ def start_scheduler() -> None:
     _scheduler.start()
 
 
-def schedule(fn, seconds: int, job_id: str) -> None:
+def schedule(fn, seconds: int, job_id: str, *, singleton: bool = True) -> None:
     """Register another periodic task on the shared scheduler (no-op if the
-    scheduler is disabled)."""
+    scheduler is disabled).
+
+    `singleton=True` (the default) means one worker in the cluster runs it —
+    correct for anything that changes shared database or chain state, where a
+    second worker doing the same work would double it.
+
+    `singleton=False` means EVERY worker runs it. That is what a job refreshing
+    a per-process in-memory cache needs: locking it to one worker leaves the
+    other workers' copies frozen at whatever they lazily loaded first, and the
+    value each caller sees then depends on which worker answered. That is
+    exactly how a 2.5M THKT deposit failed to appear on the dashboard while
+    sitting in the contract.
+    """
     if not _scheduler or seconds <= 0:
         return
-    _scheduler.add_job(_cluster_singleton(fn, job_id, seconds), "interval",
-                       seconds=seconds, id=job_id, max_instances=1, coalesce=True)
+    job = _cluster_singleton(fn, job_id, seconds) if singleton else fn
+    _scheduler.add_job(job, "interval", seconds=seconds, id=job_id,
+                       max_instances=1, coalesce=True)
 
 
 def chain_bridge() -> ChainBridge:
