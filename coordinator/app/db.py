@@ -296,15 +296,45 @@ def _init_schema() -> None:
                     rate = float(os.getenv("REWARD_PER_MINUTE", "1.0")) or 1.0
                     conn.execute(text(seed.format(rate=rate)))
 
-        # SQLite is dynamically typed and rejects this syntax; only Postgres needs it.
-        if engine.dialect.name == "postgresql":
-            for table, column in _WIDENED:
-                if insp.has_table(table):
+    # Widening runs outside the transaction and only when the column is not
+    # already TEXT. It used to run on every boot: ALTER TABLE takes an ACCESS
+    # EXCLUSIVE lock, so re-issuing a no-op migration on every deploy is a
+    # deadlock waiting for live traffic — the same way index creation just took
+    # production down.
+    if engine.dialect.name == "postgresql":
+        for table, column in _WIDENED:
+            if not insp.has_table(table):
+                continue
+            current = {c["name"]: c for c in insp.get_columns(table)}
+            col = current.get(column)
+            if col is not None and str(col["type"]).upper().startswith("TEXT"):
+                continue                        # already widened; nothing to do
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("SET LOCAL lock_timeout = '3s'"))
                     conn.execute(text(f"ALTER TABLE {table} ALTER COLUMN {column} TYPE TEXT"))
+            except Exception as exc:  # noqa: BLE001 — never block startup
+                print(f"[db] widen {table}.{column} skipped ({type(exc).__name__}); retrying next boot")
 
-        for name, table, cols in _INDEXES:
-            if insp.has_table(table):
+    # Index creation is deliberately outside the transaction above, one
+    # statement at a time, and never fatal. CREATE INDEX takes a SHARE lock on
+    # the table; during a rolling deploy the outgoing container is still writing
+    # to it, and the two deadlock. That took production down — the app refused
+    # to boot because it could not create an index that already existed.
+    #
+    # A missing index is slow, not wrong, and the next boot retries it. A short
+    # lock_timeout means we give up quickly rather than stalling startup behind
+    # live traffic.
+    for name, table, cols in _INDEXES:
+        if not insp.has_table(table):
+            continue
+        try:
+            with engine.begin() as conn:
+                if engine.dialect.name == "postgresql":
+                    conn.execute(text("SET LOCAL lock_timeout = '3s'"))
                 conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} {cols}"))
+        except Exception as exc:  # noqa: BLE001 — never block startup on an index
+            print(f"[db] index {name} not created ({type(exc).__name__}); retrying next boot")
 
 
 def session_scope():
