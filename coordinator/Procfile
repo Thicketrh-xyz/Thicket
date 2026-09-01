@@ -1,3 +1,14 @@
 # PYTHONUNBUFFERED so stdout logs stream to Railway in real time.
 # --workers 1 because the epoch scheduler runs in-process (multiple workers would double-publish).
-web: PYTHONUNBUFFERED=1 uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1
+#
+# --limit-concurrency is load shedding, and it is what stops a congestive
+# collapse. Without it uvicorn accepts work without bound: when requests slow
+# down, node clients give up at their own 15s timeout and retry 30 seconds
+# later while the server is STILL working on the request they abandoned.
+# Arrivals then exceed completions and the queue grows forever — measured going
+# 165 -> 591 in-flight in twelve minutes, with worst-case latency 16s -> 49s,
+# with no recovery. Past the cap uvicorn returns 503 straight away without
+# invoking the app, so a shed request costs no worker thread and no database
+# connection. Operators lose nothing: uptime is credited from elapsed time, so
+# a node that is shed now is paid in full by its next accepted beat.
+web: PYTHONUNBUFFERED=1 uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --limit-concurrency ${UVICORN_LIMIT_CONCURRENCY:-100}
