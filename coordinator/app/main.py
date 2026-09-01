@@ -219,6 +219,44 @@ STATS_TTL_S = float(os.getenv("STATS_TTL_S", "8"))
 _stats_cache: dict = {"at": 0.0, "value": None}
 _stats_lock = threading.Lock()
 
+# --- request timing ---------------------------------------------------------
+# Seven fixes deep into a saturation problem, the honest answer to "what is
+# holding the connections?" was still inference. This records it instead: the
+# slowest requests seen, and how many are in flight right now. In-process and
+# bounded, so it costs nothing and cannot itself become the problem.
+SLOW_REQUEST_S = float(os.getenv("SLOW_REQUEST_S", "2"))
+_inflight: dict = {}
+_slowest: list = []
+_timing_lock = threading.Lock()
+
+
+@app.middleware("http")
+async def _time_requests(request, call_next):
+    key = f"{request.method} {request.url.path}"
+    start = time.time()
+    with _timing_lock:
+        _inflight[key] = _inflight.get(key, 0) + 1
+    try:
+        return await call_next(request)
+    finally:
+        took = time.time() - start
+        with _timing_lock:
+            _inflight[key] = max(0, _inflight.get(key, 1) - 1)
+            if not _inflight[key]:
+                _inflight.pop(key, None)
+            if took >= SLOW_REQUEST_S:
+                _slowest.append({"path": key, "seconds": round(took, 2),
+                                 "at": round(start, 1)})
+                # keep the worst 20 seen, so a burst cannot grow this unbounded
+                _slowest.sort(key=lambda r: r["seconds"], reverse=True)
+                del _slowest[20:]
+
+
+def timing_report() -> dict:
+    with _timing_lock:
+        return {"in_flight": dict(sorted(_inflight.items(), key=lambda kv: -kv[1])),
+                "slowest_requests": list(_slowest)}
+
 
 def refresh_pool_cache() -> None:
     """Scheduler job: re-read the rewards pool balance from chain."""
@@ -297,6 +335,8 @@ def health():
         "epoch_seconds": EPOCH_SECONDS,
         "last_publish": {**pub, "ago_s": ago},
         "gas": gas,
+        # What is actually slow, rather than what we think is slow.
+        **timing_report(),
     }
 
 
