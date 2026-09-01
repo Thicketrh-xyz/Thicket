@@ -112,6 +112,37 @@ QUORUM_SPLIT_REWARD = os.getenv("QUORUM_SPLIT_REWARD", "1").lower() not in ("0",
 chain = chain_bridge()
 
 
+# Whether any paid work might be waiting. Starts True so a fresh process never
+# misses work, is set True whenever a job is created or requeued, and goes False
+# the moment a lookup finds nothing. With almost no paid work on the network,
+# this turns a jobs query on every heartbeat into no query at all — without ever
+# delaying a real job, because creating one flips it back on.
+_work = {"available": True}
+
+
+def mark_work_available() -> None:
+    _work["available"] = True
+
+
+def requeue_stale_jobs() -> int:
+    """Scheduler job: give back work a node took and never returned."""
+    db = SessionLocal()
+    try:
+        cutoff = time.time() - JOB_ASSIGN_TIMEOUT_S
+        stale = (db.query(Job)
+                   .filter(Job.status == "assigned", Job.created_at < cutoff)
+                   .all())
+        for j in stale:
+            j.status = "pending"
+            j.assigned_node = None
+        if stale:
+            mark_work_available()
+        db.commit()
+        return len(stale)
+    finally:
+        db.close()
+
+
 def sweep_quorums() -> int:
     """Settle quorums whose deadline has passed. Heartbeats do this too, but a
     quorum whose selected nodes all went offline would otherwise sit open
@@ -133,6 +164,7 @@ def _startup():
     init_db()
     start_scheduler()
     schedule(sweep_quorums, qm.QUORUM_DEADLINE_S, "sweep_quorums")
+    schedule(requeue_stale_jobs, JOB_ASSIGN_TIMEOUT_S, "requeue_stale_jobs")
     schedule(refresh_gas_cache, _GAS_REFRESH_S, "refresh_gas")
     schedule(refresh_pool_cache, _POOL_REFRESH_S, "refresh_pool")
 
@@ -517,14 +549,10 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
             challenge = ch.to_dict()
         node.last_challenge_at = now
 
-    # Requeue work orphaned by a node that took a job and never came back.
-    stale_before = now - JOB_ASSIGN_TIMEOUT_S
-    stale = (db.query(Job)
-               .filter(Job.status == "assigned", Job.created_at < stale_before)
-               .all())
-    for j in stale:
-        j.status = "pending"
-        j.assigned_node = None
+    # (Requeuing work orphaned by a node that never came back used to happen
+    # here, on every heartbeat. It now runs on the scheduler — see
+    # requeue_stale_jobs. Scanning the jobs table forty times a second to find
+    # nothing is not free, and this network has had five paid jobs in total.)
 
     # Hand this node work it can actually run (capability-matched). Several at a
     # time, so a large batch drains in parallel instead of one item per beat.
@@ -547,11 +575,16 @@ def heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
             job_payloads.append({"id": j.id, "kind": j.kind, "prompt": j.prompt,
                                  "image": j.image, "seed": j.seed})
 
-    if node_caps and len(job_payloads) < budget:
+    if node_caps and len(job_payloads) < budget and _work["available"]:
         pending = (db.query(Job)
                      .filter(Job.status == "pending", Job.kind.in_(node_caps))
                      .order_by(Job.created_at)
                      .limit(budget - len(job_payloads)).all())
+        if not pending:
+            # Nothing waiting anywhere for this capability. Stop asking on every
+            # beat until something creates work; POST /jobs and /batches flip it
+            # back on, so no buyer ever waits for this.
+            _work["available"] = False
         for p in pending:
             p.status = "assigned"
             p.assigned_node = req.address
@@ -876,6 +909,7 @@ def submit_job(req: JobReq, db: Session = Depends(get_db)):
     db.flush()
     q = maybe_spot_check(db, job)
     db.commit()
+    mark_work_available()      # a beat may have switched the lookup off
     return {"id": jid, "status": job.status, "price_thkt": price,
             "verified": bool(q)}
 
@@ -949,6 +983,7 @@ def submit_batch(req: BatchReq, db: Session = Depends(get_db)):
         if maybe_spot_check(db, job):
             verified += 1
     db.commit()
+    mark_work_available()      # a beat may have switched the lookup off
     return {"id": bid, "items": len(req.items), "price_thkt": total,
             "spot_checked": verified}
 
