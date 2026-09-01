@@ -89,14 +89,20 @@ class ChainBridge:
             Web3.to_checksum_address(address)).call()
         return registered and self_stake > 0
 
-    def pool_balance(self) -> float:
-        """THKT currently in the rewards pool (0.0 in DRY mode)."""
+    def pool_balance(self) -> float | None:
+        """THKT currently in the rewards pool, or None if it could not be read.
+
+        None, not 0.0. A failed RPC returning zero is indistinguishable from a
+        genuinely empty rewards pool, and "the pool is empty" is the single most
+        alarming thing this system can say to an operator. Callers must render
+        unknown as unknown.
+        """
         if self.dry:
-            return 0.0
+            return None
         try:
             return self.distributor.functions.poolBalance().call() / 1e18
         except Exception:  # noqa: BLE001
-            return 0.0
+            return None
 
     def gas_balance(self) -> float:
         """Native balance of the publisher key, in whole units (0.0 in DRY mode).

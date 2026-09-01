@@ -256,7 +256,7 @@ def refresh_gas_cache() -> None:
 # with one lazy first fill so a freshly restarted process doesn't report a pool
 # of zero until the first tick.
 _POOL_REFRESH_S = 30
-_pool_cache: dict = {"at": 0.0, "value": 0.0}
+_pool_cache: dict = {"at": 0.0, "value": None, "loading": False}
 
 # /nodes is a public page that every visitor polls. Building its row set means
 # reading every node and aggregating the whole quorum_results table, so without
@@ -323,21 +323,40 @@ def timing_report() -> dict:
                 "slowest_requests": list(_slowest)}
 
 
+def _round_or_none(v, dp):
+    return None if v is None else round(v, dp)
+
+
 def refresh_pool_cache() -> None:
-    """Scheduler job: re-read the rewards pool balance from chain."""
+    """Scheduler job: re-read the rewards pool balance from chain.
+
+    Only a successful read updates the cache. A failed one leaves the last good
+    value in place — stale is honest, zero is a lie.
+    """
     try:
         value = chain.pool_balance()
-        _pool_cache.update(at=time.time(), value=value)
+        if value is not None:
+            _pool_cache.update(at=time.time(), value=value)
     except Exception:  # noqa: BLE001 — keep the last good reading
         pass
 
 
-def _pool_thkt() -> float:
-    if not _pool_cache["at"]:
-        # Claim the slot before the read, so concurrent first callers don't all
-        # go to the RPC together — the stampede that made /health block.
-        _pool_cache["at"] = time.time()
-        refresh_pool_cache()
+def _pool_thkt() -> float | None:
+    """The pool balance, or None while it is genuinely unknown.
+
+    This used to claim the cache slot *before* reading, to stop concurrent
+    callers stampeding the RPC. When the read then failed it left a timestamp
+    and a value of 0.0 behind, and the endpoint reported an empty rewards pool
+    until the next scheduler tick — which is the most alarming thing this system
+    can say to an operator. The stampede guard is a separate flag now, so a
+    failure cannot masquerade as a reading.
+    """
+    if _pool_cache["value"] is None and not _pool_cache["loading"]:
+        _pool_cache["loading"] = True
+        try:
+            refresh_pool_cache()
+        finally:
+            _pool_cache["loading"] = False
     return _pool_cache["value"]
 
 
@@ -471,7 +490,9 @@ def _build_stats(db: Session) -> dict:
         "jobs_completed": total_jobs_done,
         "revenue_share": OPERATOR_REVENUE_SHARE,
         "thkt_earned": round(total_earned, 2),
-        "pool_thkt": round(_pool_thkt(), 2),                   # rewards pool balance (on-chain, cached)
+        # null, never 0.0, when the chain read has not succeeded yet: the UI
+        # renders unknown as "—" and an empty pool would read as a crisis.
+        "pool_thkt": _round_or_none(_pool_thkt(), 2),
         "capabilities": sorted({c for n in nodes if n.last_heartbeat
                                 and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S
                                 for c in (n.capabilities or "").split(",") if c}),
@@ -1210,7 +1231,7 @@ def _build_nodes(db, limit, offset, sort, status, dir, now) -> dict:
             "jobs_queued": db.query(Job).filter(Job.status == "pending").count(),
             "jobs_active": db.query(Job).filter(
                 Job.status.in_(("assigned", "verifying"))).count(),
-            "pool_thkt": round(_pool_thkt(), 2),
+            "pool_thkt": _round_or_none(_pool_thkt(), 2),
             # Count settled quorums, exactly as /stats does. Summing the
             # per-node agreed answers instead reported ~3x higher (k=3 nodes
             # answer each quorum) under the same name as the landing page's
