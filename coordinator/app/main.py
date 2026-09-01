@@ -55,6 +55,11 @@ CHALLENGE_SIZE = int(os.getenv("CHALLENGE_SIZE", "128"))
 MAX_FAILS_BEFORE_SLASH = int(os.getenv("MAX_FAILS_BEFORE_SLASH", "3"))
 SLASH_AMOUNT_WEI = int(float(os.getenv("SLASH_AMOUNT_THKT", "100")) * 10**18)
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+# Closing registration turns away NEW operators only. An address already in the
+# nodes table is always let through, because the node client re-registers on
+# every start — refusing those would lock out existing operators the moment they
+# restarted, which is the opposite of the intent.
+REGISTRATION_OPEN = os.getenv("REGISTRATION_OPEN", "1").lower() not in ("0", "false", "no")
 # --- pricing ---------------------------------------------------------------
 # Work is priced by how much compute it actually costs a node: a one-line prompt
 # and a 50-page document are not the same job. Buyers are quoted before paying.
@@ -418,6 +423,9 @@ def register(req: RegisterReq, db: Session = Depends(get_db)):
     msg = signing.register_message(req.address, req.node_id)
     if not signing.verify(msg, req.signature, req.address):
         raise HTTPException(401, "bad signature")
+    if not REGISTRATION_OPEN and not db.get(Node, req.address):
+        raise HTTPException(503, "registration is temporarily closed — existing "
+                                 "operators are unaffected and keep earning")
     if not chain.is_bonded(req.address):
         raise HTTPException(403, "operator not bonded on-chain")
     node = db.get(Node, req.address) or Node(address=req.address)

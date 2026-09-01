@@ -217,6 +217,14 @@ _INDEXES = [
     # beat, and the table grows ~38,000 rows a day. Measured on production-shaped
     # data: 14.8ms per beat without this index, 0.64ms with it.
     ("ix_quorums_status_deadline", "quorums", "(status, deadline)"),
+    # Every heartbeat requeues work orphaned by nodes that took a job and never
+    # came back — a scan of the whole jobs table, tens of times a second.
+    ("ix_jobs_status_created", "jobs", "(status, created_at)"),
+    # /jobs?payer=... is ~15% of requests and filtered on an unindexed column.
+    ("ix_jobs_payer", "jobs", "(payer)"),
+    # eligible_nodes() picks quorum candidates by last_heartbeat on every
+    # challenge dispatch; nothing indexed it.
+    ("ix_nodes_last_heartbeat", "nodes", "(last_heartbeat)"),
 ]
 
 
