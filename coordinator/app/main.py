@@ -210,6 +210,15 @@ _nodes_cache: dict = {"at": 0.0, "rows": None, "totals": None}
 # which is seconds out of date and perfectly good.
 _nodes_lock = threading.Lock()
 
+# /stats is the single most requested endpoint on the service — 43% of logged
+# traffic — because the portal polls it every 8 seconds per open tab and the
+# landing page hits it too. Uncached it loads every node row, sums across them,
+# and COUNTs 200,000+ settled quorums, every single time. Same lock discipline
+# as the node cache: one rebuild, everyone else served the recent copy.
+STATS_TTL_S = float(os.getenv("STATS_TTL_S", "8"))
+_stats_cache: dict = {"at": 0.0, "value": None}
+_stats_lock = threading.Lock()
+
 
 def refresh_pool_cache() -> None:
     """Scheduler job: re-read the rewards pool balance from chain."""
@@ -293,7 +302,32 @@ def health():
 
 @app.get("/stats")
 def stats(db: Session = Depends(get_db)):
-    """Real network stats for the landing page — computed from the DB, no fakes."""
+    """Real network stats for the landing page — computed from the DB, no fakes.
+
+    Cached: see _stats_cache. The figures move continuously but nobody needs
+    them to the second, and the uncached version was the largest single source
+    of database load on the service.
+    """
+    now = time.time()
+    if _stats_cache["value"] is not None and now - _stats_cache["at"] < STATS_TTL_S:
+        return _stats_cache["value"]
+
+    if not _stats_lock.acquire(blocking=False):
+        if _stats_cache["value"] is not None:
+            return _stats_cache["value"]        # stale beats a second full scan
+        _stats_lock.acquire()
+    try:
+        now = time.time()
+        if _stats_cache["value"] is not None and now - _stats_cache["at"] < STATS_TTL_S:
+            return _stats_cache["value"]
+        value = _build_stats(db)
+        _stats_cache.update(at=now, value=value)
+        return value
+    finally:
+        _stats_lock.release()
+
+
+def _build_stats(db: Session) -> dict:
     nodes = db.query(Node).all()
     now = time.time()
     online = sum(1 for n in nodes if n.last_heartbeat and (now - n.last_heartbeat) <= HEARTBEAT_TIMEOUT_S)
