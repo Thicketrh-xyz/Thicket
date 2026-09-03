@@ -143,10 +143,19 @@ rate is what recruits them.
    which fires when fewer than k=3 nodes look online — so a long outage that ages out
    heartbeats can make every challenge result cost the coordinator a third of a second of
    CPU, deepening the outage that caused it. Has not fired; worth capping the size.
-7. **No multisig.** The owner key can call `recover()` and move the whole pool in one
+7. **`/health` lost most of its visibility to multi-worker.** `last_publish` and the
+   timing counters live in per-process memory, but only one worker settles epochs — so
+   6 of 8 `/health` calls report `publish ok=None` and the "no epoch closed recently"
+   alarm is effectively dead on 3 workers in 4. Settlement itself is fine (the on-chain
+   epoch counter advances); it is the *reporting* that is unreliable, which matters
+   because a frozen root is the failure this alarm exists to catch. Fix: persist the last
+   publish result to a `counters` row so any worker can report it. Same shape as the
+   pool-cache bug of 2026-09-02 — single-worker state read through a multi-worker front
+   door; check for other instances while fixing. Deferred deliberately, not forgotten.
+8. **No multisig.** The owner key can call `recover()` and move the whole pool in one
    transaction. The project has decided against transferring ownership for now — this is a
    known, accepted risk, not an oversight.
-8. **Contracts are unaudited.**
+9. **Contracts are unaudited.**
 
 ## Architecture
 

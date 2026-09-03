@@ -11,6 +11,7 @@ const docsRoutes = {
       if (/^\/docs(\/|$)/.test(req.url.split("?")[0])) req.url = "/docs.html";
       else if (/^\/app(\/|$)/.test(req.url.split("?")[0])) req.url = "/app.html";
       else if (/^\/nodes(\/|$)/.test(req.url.split("?")[0])) req.url = "/nodes.html";
+      else if (/^\/nft(\/|$)/.test(req.url.split("?")[0])) req.url = "/nft.html";
       next();
     });
   },
@@ -21,7 +22,8 @@ export default defineConfig({
   build: {
     // Multi-page: landing (index.html) + portal + docs + public node list.
     rollupOptions: {
-      input: { main: "index.html", app: "app.html", docs: "docs.html", nodes: "nodes.html" },
+      input: { main: "index.html", app: "app.html", docs: "docs.html", nodes: "nodes.html",
+               nft: "nft.html" },
     },
   },
   server: {
