@@ -10,7 +10,7 @@ import "./app-docs.css";
 const NAV = [
   { href: "/", label: "Home" },
   { href: "/nodes", label: "Nodes" },
-  { href: "/nft", label: "Passes" },
+  { href: "/nft", label: "NFTs" },
   { href: "/docs", label: "Docs" },
 ];
 
@@ -303,7 +303,7 @@ export default function Nft() {
 
       <main className="page-shell">
         <section className="page-intro">
-          <SectionLabel>Passes</SectionLabel>
+          <SectionLabel>NFTs</SectionLabel>
           <h1>Multiply your node</h1>
           <p>
             A pass multiplies what your node earns per minute, for as long as it stays in the

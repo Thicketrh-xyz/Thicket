@@ -18,7 +18,7 @@ const NAV = [
   { href: "#jobs", label: "Jobs" },
   { href: "#dashboard", label: "Dashboard" },
   { href: "/nodes", label: "Nodes" },
-  { href: "/nft", label: "Passes" },
+  { href: "/nft", label: "NFTs" },
   { href: "#stake", label: "Stake" },
   { href: "/docs", label: "Docs" },
 ];
