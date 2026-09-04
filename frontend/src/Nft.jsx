@@ -307,8 +307,8 @@ export default function Nft() {
           <h1>Multiply your node</h1>
           <p>
             An NFT multiplies what your node earns per minute, for as long as it stays in the
-            wallet your node runs from. Buying one burns THKT — it is not sent to a treasury,
-            it leaves the supply. Fifty exist and there will never be more.
+            wallet your node runs from. Buying any NFT burns $THKT. It is not sent to a treasury,
+            it leaves the supply. Fifty NFTs currently exist and there will never be more.
           </p>
         </section>
 
