@@ -26,10 +26,10 @@ from . import quorum as qm
 from . import signing
 from .challenge import make_challenge, verify as verify_challenge
 from .db import (Batch, Counter, Delegation, Job, Node, PendingSlash, Quorum,
-                 QuorumResult, SessionLocal, init_db)
+                 QuorumResult, RelicHolder, SessionLocal, init_db)
 from .epoch import (EPOCH_SECONDS, OPERATOR_COMMISSION, REWARD_PER_MINUTE, chain_bridge,
-                    close_epoch, current_claims, last_publish, schedule, start_scheduler,
-                    sync_delegations)
+                    close_epoch, current_claims, last_publish, relic_multipliers, schedule,
+                    start_scheduler, sync_delegations, sync_relics)
 
 app = FastAPI(title="Thicket Coordinator", version="0.3.0")
 
@@ -126,6 +126,20 @@ def mark_work_available() -> None:
     _work["available"] = True
 
 
+RELIC_SYNC_S = int(os.getenv("RELIC_SYNC_S", "300"))
+
+
+def refresh_relics() -> int:
+    """Scheduler job: re-read relic ownership from chain into the mirror."""
+    db = SessionLocal()
+    try:
+        n = sync_relics(db)
+        db.commit()
+        return n
+    finally:
+        db.close()
+
+
 def flush_slashes() -> int:
     """Scheduler job: send any slashes verification has decided on.
 
@@ -193,6 +207,7 @@ def _startup():
     schedule(sweep_quorums, qm.QUORUM_DEADLINE_S, "sweep_quorums")
     schedule(requeue_stale_jobs, JOB_ASSIGN_TIMEOUT_S, "requeue_stale_jobs")
     schedule(flush_slashes, SLASH_FLUSH_S, "flush_slashes")
+    schedule(refresh_relics, RELIC_SYNC_S, "refresh_relics")
     schedule(refresh_gas_cache, _GAS_REFRESH_S, "refresh_gas", singleton=False)
     schedule(refresh_pool_cache, _POOL_REFRESH_S, "refresh_pool", singleton=False)
 
@@ -1396,7 +1411,8 @@ def node_status(address: str, db: Session = Depends(get_db)):
         return {"registered": False}
     now = time.time()
     online = bool(node.last_heartbeat) and (now - node.last_heartbeat) <= HEARTBEAT_TIMEOUT_S
-    uptime_thkt = node.contribution_minutes * REWARD_PER_MINUTE
+    relic_mult = relic_multipliers(db).get(node.address.lower(), 1)
+    uptime_thkt = node.contribution_minutes * REWARD_PER_MINUTE * relic_mult
     pending = uptime_thkt + node.work_thkt
 
     claim = None
@@ -1411,6 +1427,8 @@ def node_status(address: str, db: Session = Depends(get_db)):
         "address": node.address,
         "node_id": node.node_id,
         "reward_per_minute": REWARD_PER_MINUTE,
+        "relic_multiplier": relic_mult,                        # 1 when no relic held
+        "effective_per_minute": round(REWARD_PER_MINUTE * relic_mult, 6),
         "contribution_minutes": round(node.contribution_minutes, 4),
         "lifetime_minutes": round(node.lifetime_minutes, 4),   # never reset
         "uptime_thkt": round(uptime_thkt, 6),    # this epoch, from being online

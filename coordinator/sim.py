@@ -27,8 +27,9 @@ from app import quorum as qm  # noqa: E402
 from app import signing  # noqa: E402
 from app.challenge import make_challenge, solve  # noqa: E402
 from app.db import (Delegation, Job, Node, PendingSlash, Quorum, QuorumResult,  # noqa: E402
-                    SessionLocal, init_db)
-from app.epoch import OPERATOR_COMMISSION, close_epoch, split_earnings  # noqa: E402
+                    RelicHolder, SessionLocal, init_db)
+from app.epoch import (OPERATOR_COMMISSION, close_epoch, relic_multiplier,  # noqa: E402
+                       relic_multipliers, split_earnings, sync_relics)
 
 WRONG = "0x" + "de" * 32
 
@@ -603,6 +604,83 @@ def scenario_delegator_settles(db) -> None:
     db.query(Delegation).delete(); db.commit()
 
 
+def scenario_relic_multiplier(db) -> None:
+    print("\n[17] a relic multiplies uptime earnings, and only uptime")
+    _reset(db)
+    db.query(RelicHolder).delete(); db.commit()
+
+    # tier boundaries must match NodeRelic.multiplierOf exactly, or the
+    # coordinator pays a different multiplier than the artwork promises
+    check("emergent 1 -> 11x", relic_multiplier(1), 11)
+    check("emergent 5 -> 11x", relic_multiplier(5), 11)
+    check("canopy 6 -> 7x", relic_multiplier(6), 7)
+    check("canopy 15 -> 7x", relic_multiplier(15), 7)
+    check("understory 16 -> 5x", relic_multiplier(16), 5)
+    check("understory 30 -> 5x", relic_multiplier(30), 5)
+    check("bracken 31 -> 2x", relic_multiplier(31), 2)
+    check("bracken 50 -> 2x", relic_multiplier(50), 2)
+
+    plain = VirtualNode(db, 0)
+    holder = VirtualNode(db, 1)
+    for n in (plain, holder):
+        n.beat()
+        # fetch once: VirtualNode.row expires the session on every access, so
+        # two assignments through it discard the first one
+        row = db.get(Node, n.address)
+        row.contribution_minutes = 10.0
+        row.work_thkt = 4.0
+    db.add(RelicHolder(token_id=16, owner=holder.address, multiplier=5,
+                       updated_at=time.time()))
+    db.commit()
+
+    close_epoch()
+    db.expire_all()
+    rate = coord.REWARD_PER_MINUTE
+    check("no relic: uptime x1 plus work",
+          round(db.get(Node, plain.address).cumulative_reward, 6),
+          round(10.0 * rate + 4.0, 6))
+    check("relic: uptime x5 plus UNMULTIPLIED work",
+          round(db.get(Node, holder.address).cumulative_reward, 6),
+          round(10.0 * rate * 5 + 4.0, 6))
+
+
+def scenario_relic_edges(db) -> None:
+    print("\n[18] relic mirror: hoarding, transfers, and an unreadable chain")
+    _reset(db)
+    db.query(RelicHolder).delete(); db.commit()
+    a, b = VirtualNode(db, 0), VirtualNode(db, 1)
+
+    # hoarding must take the best, never the sum
+    for tid, m in ((31, 2), (1, 11), (16, 5)):
+        db.add(RelicHolder(token_id=tid, owner=a.address, multiplier=m, updated_at=time.time()))
+    db.commit()
+    check("three relics in one wallet -> best, not sum",
+          relic_multipliers(db).get(a.address.lower()), 11)
+
+    # a transfer moves the multiplier with the token
+    db.get(RelicHolder, 1).owner = b.address
+    db.commit()
+    m = relic_multipliers(db)
+    check("seller drops to its next best", m.get(a.address.lower()), 5)
+    check("recipient gains the 11x", m.get(b.address.lower()), 11)
+
+    # an unreadable chain must not wipe the mirror
+    real = coord.chain.relic_owners
+    coord.chain.relic_owners = lambda supply=50: None
+    try:
+        kept = sync_relics(db)
+        db.commit()
+    finally:
+        coord.chain.relic_owners = real
+    check("unreadable chain keeps the mirror", kept, 3)
+    check("multipliers survive an RPC failure",
+          relic_multipliers(db).get(b.address.lower()), 11)
+
+    # a node with no relic is exactly 1x, never 0
+    check("no relic is 1x", relic_multipliers(db).get("0xnobody", 1), 1)
+    db.query(RelicHolder).delete(); db.commit()
+
+
 def run() -> None:
     init_db()
     db = SessionLocal()
@@ -610,7 +688,8 @@ def run() -> None:
     coord.HEARTBEAT_TIMEOUT_S = 10_000    # never time out mid-simulation
     try:
         for scenario in (scenario_majority, scenario_inconclusive, scenario_straggler,
-                         scenario_orphaned_slot,
+                         scenario_orphaned_slot, scenario_relic_multiplier,
+                         scenario_relic_edges,
                          scenario_too_few_nodes, scenario_slash, scenario_job_quorum,
                          scenario_broken_node, scenario_epoch_holdback,
                          scenario_no_double_dispatch, scenario_fresh_node_joins,

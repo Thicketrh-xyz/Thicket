@@ -172,6 +172,27 @@ class QuorumResult(Base):
     verdict: Mapped[str] = mapped_column(String(12), default="pending")  # pending|agreed|disagreed
 
 
+class RelicHolder(Base):
+    """Who owns each Node Relic, mirrored from chain.
+
+    There are only 50, so ownership is read in full on a schedule rather than
+    reconstructed from Transfer logs — no cursor to lose, no reorg to reason
+    about, and a missed event cannot leave the mirror permanently wrong. The
+    delegation mirror learned that the hard way.
+
+    Kept in the database rather than process memory on purpose: the coordinator
+    runs several workers and only one of them runs the sync, so a per-process
+    cache would leave the others reading stale multipliers. That has already
+    happened once with the pool balance.
+    """
+    __tablename__ = "relic_holders"
+
+    token_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner: Mapped[str] = mapped_column(String(42), default="", index=True)
+    multiplier: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[float] = mapped_column(Float, default=0.0)
+
+
 class PendingSlash(Base):
     """A slash decided by verification, waiting to be sent on chain.
 

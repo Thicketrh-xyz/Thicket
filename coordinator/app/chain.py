@@ -9,6 +9,7 @@ env so nothing secret is committed:
     COORDINATOR_PRIVATE_KEY   publisher/slasher key (fund it; keep it in a KMS/HSM in prod)
     STAKING_ADDRESS           deployed NodeStaking
     DISTRIBUTOR_ADDRESS       deployed RewardsDistributor
+    RELIC_ADDRESS             deployed NodeRelic (optional; no relics without it)
 
 If web3/env aren't configured, ChainBridge runs in DRY mode: it logs what it
 *would* send instead of transacting, so the coordinator + simulator work
@@ -46,6 +47,16 @@ _STAKING_ABI = [
                 {"name": "operator", "type": "address", "indexed": True},
                 {"name": "amount", "type": "uint256", "indexed": False}]},
 ]
+_RELIC_ABI = [
+    {"name": "ownerOf", "type": "function", "stateMutability": "view",
+     "inputs": [{"name": "tokenId", "type": "uint256"}],
+     "outputs": [{"name": "", "type": "address"}]},
+    {"name": "multiplierOf", "type": "function", "stateMutability": "pure",
+     "inputs": [{"name": "tokenId", "type": "uint256"}],
+     "outputs": [{"name": "", "type": "uint256"}]},
+    {"name": "MAX_SUPPLY", "type": "function", "stateMutability": "view",
+     "inputs": [], "outputs": [{"name": "", "type": "uint256"}]},
+]
 _DISTRIBUTOR_ABI = [
     {"name": "publishRoot", "type": "function", "stateMutability": "nonpayable",
      "inputs": [{"name": "root", "type": "bytes32"}], "outputs": []},
@@ -70,6 +81,9 @@ class ChainBridge:
         self.key = os.getenv("COORDINATOR_PRIVATE_KEY")
         self.staking_addr = os.getenv("STAKING_ADDRESS")
         self.distributor_addr = os.getenv("DISTRIBUTOR_ADDRESS")
+        # Optional: the network runs fine with no relic contract at all, every
+        # operator simply sits at 1x.
+        self.relic_addr = os.getenv("RELIC_ADDRESS")
         self.dry = not (_WEB3 and self.rpc and self.key and self.staking_addr and self.distributor_addr)
 
         if not self.dry:
@@ -79,6 +93,9 @@ class ChainBridge:
                 address=Web3.to_checksum_address(self.staking_addr), abi=_STAKING_ABI)
             self.distributor = self.w3.eth.contract(
                 address=Web3.to_checksum_address(self.distributor_addr), abi=_DISTRIBUTOR_ABI)
+            self.relic = (self.w3.eth.contract(
+                address=Web3.to_checksum_address(self.relic_addr), abi=_RELIC_ABI)
+                if self.relic_addr else None)
 
     # --- reads ---
     def is_bonded(self, address: str) -> bool:
@@ -183,6 +200,38 @@ class ChainBridge:
             return (pairs, latest)
         except Exception:  # noqa: BLE001 — RPC log limits, reorgs, provider quirks
             return ([], from_block)
+
+    def relic_owners(self, max_supply: int = 50) -> dict[int, str] | None:
+        """{token_id: owner} for every minted relic, or None if it can't be read.
+
+        None rather than {} on failure, because an empty map is indistinguishable
+        from "nobody owns anything" — and acting on that would quietly drop every
+        operator back to 1x. Callers must keep the last good mirror instead.
+
+        Unminted ids revert on ownerOf and are simply absent. Fifty calls on a
+        schedule is cheap; this must never be called per node or per epoch.
+        """
+        if self.dry or not self.relic:
+            return None
+        out: dict[int, str] = {}
+        ok = False
+        for tid in range(1, max_supply + 1):
+            try:
+                out[tid] = self.relic.functions.ownerOf(tid).call()
+                ok = True
+            except Exception:  # noqa: BLE001 — unminted ids revert; that is normal
+                continue
+        # A total wipeout is far more likely to be an RPC outage than a genuine
+        # empty collection, so refuse to report it as fact.
+        return out if ok or self._relic_seen_empty() else None
+
+    def _relic_seen_empty(self) -> bool:
+        """True when the collection is provably empty rather than unreadable."""
+        try:
+            self.relic.functions.MAX_SUPPLY().call()
+            return True          # contract answers, so "no owners" is real
+        except Exception:  # noqa: BLE001
+            return False
 
     def verify_payment(self, tx_hash: str, payer: str, min_thkt: float) -> bool:
         """Confirm tx_hash is a successful fund() that paid >= min_thkt into the

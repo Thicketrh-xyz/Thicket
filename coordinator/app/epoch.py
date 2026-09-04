@@ -16,8 +16,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 
 from .chain import ChainBridge
-from .db import (Counter, Delegation, Node, Quorum, QuorumResult, engine,
-                 session_scope)
+from .db import (Counter, Delegation, Node, Quorum, QuorumResult, RelicHolder,
+                 engine, session_scope)
 from .merkle import MerkleTree
 
 REWARD_PER_MINUTE = float(os.getenv("REWARD_PER_MINUTE", "1.0"))
@@ -87,6 +87,72 @@ def sync_delegations(db) -> int:
     return len(rows)
 
 
+RELIC_SUPPLY = int(os.getenv("RELIC_SUPPLY", "50"))
+
+
+def sync_relics(db) -> int:
+    """Refresh the relic ownership mirror from chain. Returns holders known.
+
+    Scheduler job, never called from a request or from settlement. Reading all
+    50 owners takes 50 eth_calls; doing that per node per epoch is exactly the
+    shape of chain access that took the coordinator down, so settlement reads
+    this table instead and never touches the chain.
+    """
+    owners = _chain.relic_owners(RELIC_SUPPLY)
+    if owners is None:
+        # Unreadable, not empty. Leave the previous mirror alone — wiping it
+        # would silently drop every relic holder back to 1x.
+        return db.query(RelicHolder).count()
+
+    now = time.time()
+    seen = set()
+    for tid, owner in owners.items():
+        row = db.get(RelicHolder, tid) or RelicHolder(token_id=tid)
+        row.owner = owner
+        row.multiplier = relic_multiplier(tid)
+        row.updated_at = now
+        db.merge(row)
+        seen.add(tid)
+    # A relic that vanished from the read was burned or never minted.
+    for row in db.query(RelicHolder).all():
+        if row.token_id not in seen:
+            db.delete(row)
+    db.flush()
+    return len(seen)
+
+
+def relic_multiplier(token_id: int) -> int:
+    """Mirror of NodeRelic.multiplierOf — tier is derived from the id.
+
+    Duplicated here rather than read from chain because it is a pure function of
+    the id and settlement must not make network calls. If the contract's
+    boundaries ever change, this must change with it.
+    """
+    if token_id <= 5:
+        return 11      # Emergent
+    if token_id <= 15:
+        return 7       # Canopy
+    if token_id <= 30:
+        return 5       # Understory
+    return 2           # Bracken
+
+
+def relic_multipliers(db) -> dict[str, int]:
+    """{operator_address_lower: best multiplier held}. One query, no chain.
+
+    Best rather than sum: hoarding relics in one wallet must not compound into
+    an unbounded multiplier. This mirrors NodeRelic.multiplierFor exactly.
+    """
+    out: dict[str, int] = {}
+    for row in db.query(RelicHolder).all():
+        if not row.owner:
+            continue
+        key = row.owner.lower()
+        if row.multiplier > out.get(key, 1):
+            out[key] = row.multiplier
+    return out
+
+
 def split_earnings(earned: float, self_stake: float, delegations: list) -> tuple[float, dict]:
     """Divide one operator's epoch earnings with the stake backing it.
 
@@ -130,6 +196,9 @@ def close_epoch() -> dict:
         # single missed challenge excluded an operator from settlement
         # permanently. Their minutes accrued and never became claimable: 2.4M
         # THKT was stranded this way, across roughly half the network.
+        # One lookup for the whole epoch rather than one per node.
+        relic_mult = relic_multipliers(db)
+
         awaiting = {addr for (addr,) in
                     db.query(QuorumResult.node_address)
                       .join(Quorum, Quorum.id == QuorumResult.quorum_id)
@@ -145,7 +214,13 @@ def close_epoch() -> dict:
                 continue
             # Two components: time online, plus a share of what buyers paid for
             # the work this node actually did.
-            earned = node.contribution_minutes * REWARD_PER_MINUTE + node.work_thkt
+            #
+            # A relic multiplies the UPTIME half only. Multiplying the work share
+            # would pay a holder more than the buyer paid for that job, taking
+            # the difference out of the pool — the revenue share exists precisely
+            # so paid work cannot become an unbounded claim on it.
+            mult = relic_mult.get(node.address.lower(), 1)
+            earned = node.contribution_minutes * REWARD_PER_MINUTE * mult + node.work_thkt
             node.contribution_minutes = 0.0
             node.work_thkt = 0.0
 
