@@ -8,6 +8,8 @@ export const COORD = "https://thicket-production.up.railway.app";
 export const TOKEN = "0xC4F36C7c1D00dcaab1d01159466afa189BFc7161";
 export const STAKING = "0xB179254Ca9A5eB59270c6a0088DD46a8a07b9bb9";
 export const DIST = "0x1c890110e9cc3dAdeBD6c449437606783B4B682b";
+export const RELIC = "0x1138d62Bee36134DbB9914A102695c9EAEA5234E";
+export const RELIC_SALE = "0x3DB708D6F512BCBb9e24eEac8132B5b3B1643a4F";
 export const REPO = "https://github.com/Thicketrh-xyz/Thicket";
 export const DEXSCREENER = "https://dexscreener.com/robinhood/0xbf2b37e83be2c037f02aab73d2d2dba7a054e1cf6a9de4575d532cc50fd61703";
 export const PORTAL = "/app";
@@ -37,6 +39,7 @@ export const PAGES = [
       ["verification", "Challenges & slashing", "How work is checked and what it costs to fail"],
       ["staking", "Staking & delegation", "Bonding, unbonding, and what delegation does not do"],
       ["claiming", "Claiming rewards", "When earnings settle and why claimable can be zero"],
+      ["passes", "Node Passes", "What the multiplier does, and the half of your earnings it does not touch"],
       ["security", "Private key security", "The one mistake you cannot undo"],
     ],
   },

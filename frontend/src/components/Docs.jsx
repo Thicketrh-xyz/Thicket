@@ -9,6 +9,7 @@ import { RunNode } from "./docs/pages/RunNode";
 import { Verification } from "./docs/pages/Verification";
 import { Staking } from "./docs/pages/Staking";
 import { Claiming } from "./docs/pages/Claiming";
+import { Passes } from "./docs/pages/Passes";
 import { Security } from "./docs/pages/Security";
 import { Compute } from "./docs/pages/Compute";
 import { Sdk } from "./docs/pages/Sdk";
@@ -29,6 +30,7 @@ const ROUTES = {
   "verification": Verification,
   "staking": Staking,
   "claiming": Claiming,
+  "passes": Passes,
   "security": Security,
   "compute": Compute,
   "sdk": Sdk,

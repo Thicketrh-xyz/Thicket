@@ -424,7 +424,9 @@ export default function Nft() {
             </table>
             <p className="hint">
               One pass boosts <strong>one operator address</strong>. A fleet does not multiply
-              it — each node would need its own, and there are only {SUPPLY}.
+              it — each node would need its own, and there are only {SUPPLY}. The multiplier
+              applies to the uptime half of your earnings, never the share paid for completed
+              work — <a href="/docs/passes">how the multiplier works</a>.
             </p>
           </div>
         </section>
@@ -436,7 +438,7 @@ export default function Nft() {
               <tr><th>Burn</th><td>THKT is burned via <code>burnFrom</code> on the token — total supply drops and nobody receives it. Up to {num(totals.maxBurn)} THKT if all {SUPPLY} sell.</td></tr>
               <tr><th>Multiplier</th><td>Multiplies your node's per-minute rate at epoch settlement. Verified against the chain, never self-reported.</td></tr>
               <tr><th>Scope</th><td>One pass, one operator address. Transferable — the multiplier follows whoever holds it.</td></tr>
-              <tr><th>Supply</th><td>{SUPPLY} minted at deploy across four tiers. There is no mint function afterwards.</td></tr>
+              <tr><th>Supply</th><td>{SUPPLY} token ids across four tiers, and the contract rejects any id above {SUPPLY}. Passes are minted when they are bought, not at deploy, so an unclaimed id has no owner yet.</td></tr>
             </tbody>
           </table>
         </section>
