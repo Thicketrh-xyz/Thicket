@@ -10,6 +10,7 @@ import "./app-docs.css";
 const NAV = [
   { href: "/", label: "Home" },
   { href: "/nodes", label: "Nodes" },
+  { href: "/nft", label: "Passes" },
   { href: "/docs", label: "Docs" },
 ];
 

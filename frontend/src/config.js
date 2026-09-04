@@ -18,6 +18,11 @@ export const config = {
     token: import.meta.env.VITE_TOKEN_ADDRESS || "",
     staking: import.meta.env.VITE_STAKING_ADDRESS || "",
     distributor: import.meta.env.VITE_DISTRIBUTOR_ADDRESS || "",
+    // Two different addresses, easily confused: `relic` is the ERC721 that holds
+    // ownership (and the one the coordinator's RELIC_ADDRESS must point at),
+    // `relicSale` is the burn-and-mint contract the buy button talks to.
+    relic: import.meta.env.VITE_RELIC_ADDRESS || "",
+    relicSale: import.meta.env.VITE_RELIC_SALE_ADDRESS || "",
   },
 };
 
@@ -27,6 +32,13 @@ export const explorerAddr = (addr) => `${config.chain.blockExplorerUrls[0]}/addr
 // True only once contracts are deployed and their addresses are in the env.
 export const CONTRACTS_LIVE = Boolean(
   config.contracts.token && config.contracts.staking && config.contracts.distributor
+);
+
+// The relic page needs the token and the two relic contracts and nothing else.
+// It ships on its own schedule, so it gets its own flag rather than riding on
+// CONTRACTS_LIVE — staking and the distributor have no bearing on buying a pass.
+export const RELICS_LIVE = Boolean(
+  config.contracts.token && config.contracts.relic && config.contracts.relicSale
 );
 
 // When no wallet/coordinator/contracts are wired, the app runs in demo mode

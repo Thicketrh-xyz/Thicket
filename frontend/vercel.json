@@ -13,6 +13,10 @@
       "destination": "/nodes.html"
     },
     {
+      "source": "/nft",
+      "destination": "/nft.html"
+    },
+    {
       "source": "/docs",
       "destination": "/docs.html"
     },

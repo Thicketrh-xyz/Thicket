@@ -276,3 +276,64 @@
   .node-cards { grid-template-columns: 1fr; }
 }
 
+
+/* ---------- passes (wireframe) ---------- */
+.nft-h2 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 14px; }
+
+.tier__head { display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 24px; flex-wrap: wrap; margin-bottom: 16px; }
+.tier__name { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 4px; }
+.tier__blurb { color: var(--muted-foreground); font-size: .92rem; margin: 0; max-width: 46ch; }
+.tier__facts { display: flex; gap: 26px; margin: 0; flex-wrap: wrap; }
+.tier__facts dt { font-family: var(--font-display); font-size: 9px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted-foreground); }
+.tier__facts dd { margin: 3px 0 0; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.tier__mult { color: #5f8a10; font-weight: 600; }
+
+/* Portrait tiles matching the card's own proportions, so every relic is shown
+   whole and at the same scale — the art is a tall card, not a square. */
+.tier__grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.pass { position: relative; width: 116px; height: 159px; padding: 0; cursor: pointer;
+  display: block; overflow: hidden; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: #11150e; transition: transform .12s ease; }
+.pass:hover:not(:disabled) { transform: translateY(-3px); border-color: rgba(184,242,58,.75); }
+.pass--selected { border-color: var(--lime); box-shadow: 0 0 0 2px rgba(184,242,58,.45); }
+.pass--taken { opacity: .45; cursor: default; }
+/* aria-disabled, not disabled: a disabled button fires no mouse events, so a
+   claimed relic could never be hovered to see it up close. */
+.pass[aria-disabled="true"] { pointer-events: auto; }
+.pass--taken .pass__img { filter: grayscale(.85); }
+.pass__img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pass__num { position: absolute; left: 6px; bottom: 5px; font-family: var(--font-display);
+  font-size: 10px; font-weight: 700; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+.pass__lock { position: absolute; top: 6px; right: 6px; color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+
+/* Hover zoom: fixed and viewport-clamped in JS, so edge tiles are never clipped. */
+.peek { position: fixed; z-index: 60; pointer-events: none; border-radius: 12px;
+  height: 445px;
+  overflow: hidden; background: #11150e; border: 1px solid rgba(184,242,58,.5);
+  box-shadow: 0 26px 60px -18px rgba(10,14,8,.65); }
+.peek img { width: 100%; display: block; }
+.peek__bar { display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 11px; font-size: 12px; color: #eef3e2; background: #11150e; }
+.peek__mult { color: #b8f23a; font-weight: 700; font-family: var(--font-display); }
+
+.nft-split { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
+.nft-order { margin: 0 0 16px; }
+.nft-order > div { display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
+  padding: 9px 0; border-bottom: 1px solid var(--line); }
+.nft-order dt { font-family: var(--font-display); font-size: 10px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--muted-foreground); }
+.nft-order dd { margin: 0; font-size: .95rem; font-variant-numeric: tabular-nums;
+  display: inline-flex; align-items: center; gap: 5px; }
+.nft-burn { color: #b4451f; }
+.nft-steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.nft-step { display: flex; align-items: center; gap: 9px; font-size: .9rem; color: var(--muted-foreground); }
+.nft-step__n { display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 20px;
+  border-radius: 999px; background: var(--secondary); font-family: var(--font-display);
+  font-size: 11px; font-weight: 700; color: var(--ink); }
+
+@media (max-width: 860px) { .nft-split { grid-template-columns: 1fr; }
+  .tier__facts { gap: 18px; }
+  .pass { width: 96px; height: 132px; } }

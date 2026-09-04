@@ -1,8 +1,8 @@
 // Wallet + contract wiring via ethers v6. All calls no-op gracefully if a
 // wallet or contract address is missing, so the app still runs in demo mode.
-import { BrowserProvider, Contract, JsonRpcProvider, id, parseUnits } from "ethers";
+import { BrowserProvider, Contract, Interface, JsonRpcProvider, id, parseUnits } from "ethers";
 import { config } from "../config";
-import { TOKEN_ABI, STAKING_ABI, DISTRIBUTOR_ABI } from "./abi";
+import { TOKEN_ABI, STAKING_ABI, DISTRIBUTOR_ABI, RELIC_ABI, RELIC_SALE_ABI } from "./abi";
 
 export function hasWallet() {
   return typeof window !== "undefined" && !!window.ethereum;
@@ -191,5 +191,86 @@ export async function delegate(signer, operator, amountThkt, onStatus = () => {}
   await approveIfNeeded(token, await signer.getAddress(), amount, onStatus);
   onStatus("Delegating…");
   const receipt = await (await staking.delegate(operator, amount)).wait();
+  return receipt.hash;
+}
+
+// --- relics ---------------------------------------------------------------
+
+// Whole-page state for /nft over the public RPC. Same reasoning as the node
+// list: a visitor with no wallet installed still has to see which passes are
+// gone, so this must not require a signer.
+//
+// `availability()` returns all 50 in one call — fifty separate `available()`
+// reads is exactly the shape that gets us rate-limited on a public RPC.
+export async function getRelicSaleState() {
+  const provider = publicProvider();
+  if (!provider || !config.contracts.relicSale) return null;
+  const sale = new Contract(config.contracts.relicSale, RELIC_SALE_ABI, provider);
+  const [availability, open, totalBurned] = await Promise.all([
+    sale.availability(),
+    sale.open(),
+    sale.totalBurned(),
+  ]);
+  // bool[50] arrives as an ethers Result; copy it to a plain array so the page
+  // can index it without dragging the Result's proxy semantics through render.
+  return { availability: Array.from(availability, Boolean), open, totalBurned };
+}
+
+// What the buy panel needs about the connected wallet: THKT balance, how much
+// the sale is already approved for, and the multiplier this address already has.
+export async function getRelicBuyerInfo(signer, address) {
+  const token = contract(config.contracts.token, TOKEN_ABI, signer);
+  const relic = contract(config.contracts.relic, RELIC_ABI, signer);
+  if (!token || !relic || !config.contracts.relicSale) return null;
+  const [balance, allowance, multiplier] = await Promise.all([
+    token.balanceOf(address),
+    token.allowance(address, config.contracts.relicSale),
+    relic.multiplierFor(address),
+  ]);
+  return { balance, allowance, multiplier };
+}
+
+const SALE_IFACE = new Interface(RELIC_SALE_ABI);
+
+// Name of the custom error a failed sale call reverted with, or null.
+//
+// ethers fills in `e.revert` when the failure comes back through the contract,
+// but a revert caught during *gas estimation* — which is where buy() fails,
+// before any transaction is sent — is raised by the provider, and the provider
+// has no ABI to decode against. So `e.revert` is null and the message reads
+// "execution reverted (unknown custom error)" even though the selector and args
+// are sitting right there on `e.data`. Decode them rather than show a buyer
+// that. Verified on a fork: a taken id yields 0x0551b8de + the id.
+export function relicRevertName(e) {
+  if (e?.revert?.name) return e.revert.name;
+  const data = e?.data ?? e?.info?.error?.data;
+  if (typeof data !== "string" || data.length < 10) return null;
+  try {
+    return SALE_IFACE.parseError(data)?.name ?? null;
+  } catch {
+    return null;   // some other contract's error, or not an error at all
+  }
+}
+
+// Buy one relic: approve the sale for the price, then buy. Same
+// approve-then-act shape as payForCompute.
+//
+// priceWei is the price *this page believes*, handed straight to buy()'s
+// maxPriceWei. Deliberately not read from priceOf() first: the contract compares
+// the two and reverts with PriceChanged, and that is only a check while the
+// number originates in the frontend's own tier table. Reading it from the chain
+// and passing it back would have the chain agree with itself every time.
+export async function buyRelic(signer, tokenId, priceWei, onStatus = () => {}) {
+  const token = contract(config.contracts.token, TOKEN_ABI, signer);
+  const sale = contract(config.contracts.relicSale, RELIC_SALE_ABI, signer);
+  if (!token || !sale) throw new Error("Relic contracts not configured");
+  const owner = await signer.getAddress();
+  const allowance = await token.allowance(owner, config.contracts.relicSale);
+  if (allowance < priceWei) {
+    onStatus("Approving THKT…");
+    await (await token.approve(config.contracts.relicSale, priceWei)).wait();
+  }
+  onStatus("Burning & claiming…");
+  const receipt = await (await sale.buy(tokenId, priceWei)).wait();
   return receipt.hash;
 }
