@@ -52,7 +52,7 @@ const priceWeiOf = (tier) => parseUnits(String(tier.price), 18);
 function saleError(e) {
   switch (relicRevertName(e)) {
     case "SaleClosed":           return "The sale isn't open yet.";
-    case "NotAvailable":         return "That pass was claimed a moment ago — pick another.";
+    case "NotAvailable":         return "That NFT was claimed a moment ago — pick another.";
     case "PriceChanged":         return "Price mismatch — reload the page and try again.";
     case "InsufficientBalance":  return "Not enough THKT in this wallet.";
     case "InsufficientAllowance":return "The approval didn't go through — try again.";
@@ -263,7 +263,7 @@ export default function Nft() {
     if (saleFailed) return "Chain unreachable";
     if (saleClosed) return "Sale not open yet";
     if (!session) return "Connect wallet";
-    if (!sel) return "Select a pass";
+    if (!sel) return "Select an NFT";
     return <>Approve &amp; claim <ArrowUpRight size={15} /></>;
   }
 
@@ -306,14 +306,14 @@ export default function Nft() {
           <SectionLabel>NFTs</SectionLabel>
           <h1>Multiply your node</h1>
           <p>
-            A pass multiplies what your node earns per minute, for as long as it stays in the
+            An NFT multiplies what your node earns per minute, for as long as it stays in the
             wallet your node runs from. Buying one burns THKT — it is not sent to a treasury,
             it leaves the supply. Fifty exist and there will never be more.
           </p>
         </section>
 
         <div className="nstat-grid">
-          <div className="nstat"><div className="nstat__v">{SUPPLY}</div><div className="nstat__k">Passes, ever</div></div>
+          <div className="nstat"><div className="nstat__v">{SUPPLY}</div><div className="nstat__k">NFTs, ever</div></div>
           <div className="nstat">
             <div className="nstat__v">{totals.claimed == null ? "—" : `${totals.claimed} / ${SUPPLY}`}</div>
             <div className="nstat__k">Claimed</div>
@@ -364,9 +364,9 @@ export default function Nft() {
 
         <section className="section-block nft-split">
           <div className="panel" ref={buyRef} style={{ scrollMarginTop: 20 }}>
-            <h3>{sel ? `${sel.tier.name} #${sel.tokenId}` : "Buy a pass"}</h3>
+            <h3>{sel ? `${sel.tier.name} #${sel.tokenId}` : "Buy an NFT"}</h3>
             <p className="panel__hint">
-              {sel ? "Two transactions: approve the spend, then claim." : "Pick an available pass above."}
+              {sel ? "Two transactions: approve the spend, then claim." : "Pick an available NFT above."}
             </p>
             <dl className="nft-order">
               <div><dt>Price</dt><dd>{sel ? `${num(sel.tier.price)} THKT` : "—"}</dd></div>
@@ -383,7 +383,7 @@ export default function Nft() {
             </dl>
             <div className="nft-steps">
               <div className="nft-step"><span className="nft-step__n">1</span> Approve the spend</div>
-              <div className="nft-step"><span className="nft-step__n">2</span> Claim — THKT burns, pass arrives</div>
+              <div className="nft-step"><span className="nft-step__n">2</span> Claim — THKT burns, NFT arrives</div>
             </div>
             <button className="button button--primary" onClick={onBuy}
               disabled={busy || blocked || (session && !canBuy)}>
@@ -393,7 +393,7 @@ export default function Nft() {
             {insufficient && <p className="hint">Not enough THKT in this wallet.</p>}
             {noGain && !insufficient && (
               <p className="hint">
-                This wallet already holds a {Number(info.multiplier)}× pass. Passes don't stack —
+                This wallet already holds a {Number(info.multiplier)}× NFT. They don't stack —
                 settlement uses the highest one you hold, so this would not raise your rate.
               </p>
             )}
@@ -412,7 +412,7 @@ export default function Nft() {
             <table className="docs-table" style={{ margin: 0 }}>
               <thead><tr><th>Holding</th><th>Per minute</th><th>Per day</th></tr></thead>
               <tbody>
-                <tr><td>No pass</td><td>{REWARD_PER_MINUTE}</td><td>{num(Math.round(BASE_DAY))}</td></tr>
+                <tr><td>No NFT</td><td>{REWARD_PER_MINUTE}</td><td>{num(Math.round(BASE_DAY))}</td></tr>
                 {TIERS.map((t) => (
                   <tr key={t.key}>
                     <td>{t.name} · {t.mult}×</td>
@@ -423,7 +423,7 @@ export default function Nft() {
               </tbody>
             </table>
             <p className="hint">
-              One pass boosts <strong>one operator address</strong>. A fleet does not multiply
+              One NFT boosts <strong>one operator address</strong>. A fleet does not multiply
               it — each node would need its own, and there are only {SUPPLY}. The multiplier
               applies to the uptime half of your earnings, never the share paid for completed
               work — <a href="/docs/passes">how the multiplier works</a>.
@@ -437,8 +437,8 @@ export default function Nft() {
             <tbody>
               <tr><th>Burn</th><td>THKT is burned via <code>burnFrom</code> on the token — total supply drops and nobody receives it. Up to {num(totals.maxBurn)} THKT if all {SUPPLY} sell.</td></tr>
               <tr><th>Multiplier</th><td>Multiplies your node's per-minute rate at epoch settlement. Verified against the chain, never self-reported.</td></tr>
-              <tr><th>Scope</th><td>One pass, one operator address. Transferable — the multiplier follows whoever holds it.</td></tr>
-              <tr><th>Supply</th><td>{SUPPLY} token ids across four tiers, and the contract rejects any id above {SUPPLY}. Passes are minted when they are bought, not at deploy, so an unclaimed id has no owner yet.</td></tr>
+              <tr><th>Scope</th><td>One NFT, one operator address. Transferable — the multiplier follows whoever holds it.</td></tr>
+              <tr><th>Supply</th><td>{SUPPLY} token ids across four tiers, and the contract rejects any id above {SUPPLY}. They are minted when they are bought, not at deploy, so an unclaimed id has no owner yet.</td></tr>
             </tbody>
           </table>
         </section>

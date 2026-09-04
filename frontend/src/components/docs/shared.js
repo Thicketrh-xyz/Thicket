@@ -39,7 +39,7 @@ export const PAGES = [
       ["verification", "Challenges & slashing", "How work is checked and what it costs to fail"],
       ["staking", "Staking & delegation", "Bonding, unbonding, and what delegation does not do"],
       ["claiming", "Claiming rewards", "When earnings settle and why claimable can be zero"],
-      ["passes", "Node Passes", "What the multiplier does, and the half of your earnings it does not touch"],
+      ["passes", "Node NFTs", "What the multiplier does, and the half of your earnings it does not touch"],
       ["security", "Private key security", "The one mistake you cannot undo"],
     ],
   },
